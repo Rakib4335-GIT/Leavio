@@ -1,10 +1,14 @@
 using Log_Creation_Using_Login___Logout.Components;
+using Log_Creation_Using_Login___Logout.DbModels;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddDbContext<RegesterServiceContext>(
+    option =>option.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
 
