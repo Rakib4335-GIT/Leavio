@@ -1,5 +1,6 @@
 using Log_Creation_Using_Login___Logout.Components;
 using Log_Creation_Using_Login___Logout.DbModels;
+using Log_Creation_Using_Login___Logout.PanelService;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,8 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddDbContext<RegesterServiceContext>(
     option =>option.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<AdminPanelService>();
 
 var app = builder.Build();
 

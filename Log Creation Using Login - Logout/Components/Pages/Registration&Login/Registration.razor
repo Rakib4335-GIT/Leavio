@@ -1,5 +1,8 @@
 ﻿@page "/register"
 @using Log_Creation_Using_Login___Logout.Models
+@using Log_Creation_Using_Login___Logout.PanelService
+
+@inject AdminPanelService adminPanelService
 
 
 <div class="container">
@@ -16,12 +19,21 @@
     <input type="password" @bind="registrationModel.Password" />
 
     <button type="submit">Register</button>
+
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="alert alert-info">@alertMessage</div>
+    }
+    <p>Already Have An Account<a href="/login">Login</a></p>
 </form>
 
 @code {
     private RegistrationModel registrationModel = new ();
+    private string alertMessage;
     private async Task HandleRegistration()
     {
         // Handle registration logic here
+        var registtrationResponse = await adminPanelService.Register(registrationModel);
+        alertMessage = registtrationResponse.Message;
     }
 }

@@ -22,6 +22,20 @@ namespace Log_Creation_Using_Login___Logout.PanelService
                     Message = "Admin with this email already exists."
                 };
             }
+            var dbAdminInfo = new AdminInfo
+            {
+                Name = registrationModel.Name,
+                Email = registrationModel.Email,
+                Password = registrationModel.Password
+            };
+            await _context.AdminInfos.AddAsync(dbAdminInfo);
+            await _context.SaveChangesAsync();
+
+            return new ResponseModel
+            {
+                Success = true,
+                Message = "Registration Successful."
+            };
         }
     }
 }
