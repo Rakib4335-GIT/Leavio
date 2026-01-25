@@ -4,36 +4,70 @@
 
 @inject AdminPanelService adminPanelService
 
-
 <div class="container">
-    <h3>Regestration</h3>
+    <h3>Registration</h3>
 </div>
-<form @onsubmit="HandleRegistration">
+<form @onsubmit="HandleRegistration" @onsubmit:preventDefault="true">
     <label>Name:</label>
-    <input type="text" @bind="registrationModel.Name" />
+    <input type="text" @bind="registrationModel.Name" disabled="@isProcessing" />
 
     <label>Email:</label>
-    <input type="email" @bind="registrationModel.Email" />
+    <input type="email" @bind="registrationModel.Email" disabled="@isProcessing" />
 
     <label>Password:</label>
-    <input type="password" @bind="registrationModel.Password" />
+    <input type="password" @bind="registrationModel.Password" disabled="@isProcessing" />
 
-    <button type="submit">Register</button>
+    <button type="submit" disabled="@isProcessing">
+        @if (isProcessing)
+        {
+            <text>Processing...</text>
+        }
+        else
+        {
+            <text>Register</text>
+        }
+    </button>
 
     @if (!string.IsNullOrEmpty(alertMessage))
     {
-        <div class="alert alert-info">@alertMessage</div>
+        <div class="alert @(isSuccess ? "alert-success" : "alert-danger")">@alertMessage</div>
     }
-    <p>Already Have An Account<a href="/login">Login</a></p>
+    <p>Already Have An Account <a href="/login">Login</a></p>
 </form>
 
 @code {
-    private RegistrationModel registrationModel = new ();
-    private string alertMessage;
+    private RegistrationModel registrationModel = new();
+    private string alertMessage = string.Empty;
+    private bool isProcessing = false;
+    private bool isSuccess = false;
+
     private async Task HandleRegistration()
     {
-        // Handle registration logic here
-        var registtrationResponse = await adminPanelService.Register(registrationModel);
-        alertMessage = registtrationResponse.Message;
+        if (isProcessing) return;
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var registrationResponse = await adminPanelService.Register(registrationModel);
+            alertMessage = registrationResponse.Message;
+            isSuccess = registrationResponse.Success;
+
+            if (registrationResponse.Success)
+            {
+                registrationModel = new RegistrationModel();
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"An error occurred: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
     }
 }

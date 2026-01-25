@@ -29,9 +29,9 @@ public partial class RegesterServiceContext : DbContext
 
             entity.ToTable("AdminInfo");
 
-            entity.Property(e => e.Email).HasMaxLength(30);
+            entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Name).HasMaxLength(100);
-            entity.Property(e => e.Password).HasMaxLength(6);
+            entity.Property(e => e.Password).HasMaxLength(255);
         });
 
         OnModelCreatingPartial(modelBuilder);
