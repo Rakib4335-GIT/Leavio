@@ -9,6 +9,16 @@
             <span class="header-title">Experiment</span>
         </div>
 
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/aboutUs">About Us</a>
+            <a href="/contact">Contact</a>
+        </div>
+
+        @* <button @onclick="Logout" class="btn-danger btn-danger">
+            Logout
+        </button> *@
+
 
         <div class="header-button">
             <button @onclick="NavigateToLogin" class="btn btn-primary">Login</button>
@@ -32,6 +42,11 @@
 
 
 @code {
+    private async Task Logout()
+    {
+        navigation.NavigateTo("/login");
+    }
+
     private void NavigateToLogin()
     {
         navigation.NavigateTo("/login");

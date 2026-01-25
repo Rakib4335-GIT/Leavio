@@ -20,9 +20,56 @@
 }
 
 .header > div:first-child {
+    flex: 0 0 auto;
+}
+
+.nav-links {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-links a {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+    display: inline-block;
+}
+
+.nav-links a:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.nav-links a:active {
+    transform: translateY(0);
+}
+
+.header > div:first-child {
     display: flex;
     align-items: center;
     gap: 15px;
+    flex: 0 0 auto;
+}
+
+.header-button {
+    flex: 0 0 auto;
 }
 
 .logo {
@@ -113,8 +160,28 @@ main {
         gap: 15px;
     }
 
+    .header > div:first-child {
+        width: 100%;
+        justify-content: center;
+    }
+
     .header-title {
         font-size: 20px;
+    }
+
+    .nav-links {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .nav-links a {
+        flex: 1;
+        min-width: 100px;
+        max-width: 120px;
+        text-align: center;
+        font-size: 12px;
+        padding: 8px 16px;
     }
 
     .header-button {

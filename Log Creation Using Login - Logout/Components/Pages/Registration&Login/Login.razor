@@ -1,8 +1,11 @@
 ﻿@page "/login"
 @using Log_Creation_Using_Login___Logout.Models
 @using Log_Creation_Using_Login___Logout.PanelService
+@using Blazored.SessionStorage
 
 @inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager Navigation
 
 <div class="login-page">
     <div class="login-card">
@@ -102,8 +105,30 @@
         try
         {
             var response = await adminPanelService.Login(loginModel);
-            alertMessage = response.Message;
-            isSuccess = response.Success;
+
+            if (response.Success)
+            {
+                var userResponse = response.Message.Split("/");
+
+                if (userResponse.Length >= 3)
+                {
+                    await sessionStorage.SetItemAsync("adminKey", userResponse[0]);
+                    await sessionStorage.SetItemAsync("adminName", userResponse[1]);
+                    await sessionStorage.SetItemAsync("adminEmail", userResponse[2]);
+
+                    Navigation.NavigateTo("/", forceLoad: true);
+                }
+                else
+                {
+                    alertMessage = "Invalid response format";
+                    isSuccess = false;
+                }
+            }
+            else
+            {
+                alertMessage = response.Message;
+                isSuccess = false;
+            }
         }
         catch (Exception ex)
         {
