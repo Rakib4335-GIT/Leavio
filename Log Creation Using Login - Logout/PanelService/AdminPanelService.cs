@@ -75,12 +75,71 @@ namespace Log_Creation_Using_Login___Logout.PanelService
             }
             catch (DbUpdateException ex)
             {
-                // Get the inner exception message for more details
                 var innerMessage = ex.InnerException?.Message ?? ex.Message;
                 return new ResponseModel
                 {
                     Success = false,
                     Message = $"Database error: {innerMessage}"
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
+
+        public async Task<ResponseModel> Login(LoginModel loginModel)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                if (string.IsNullOrWhiteSpace(loginModel.EmailId))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Email is required."
+                    };
+                }
+
+                if (string.IsNullOrWhiteSpace(loginModel.Password))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Password is required."
+                    };
+                }
+
+                var user = await context.AdminInfos.FirstOrDefaultAsync(x => x.Email == loginModel.EmailId);
+                if (user == null)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Email Not Registered"
+                    };
+                }
+
+                if (user.Password != loginModel.Password)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Your Password is Incorrect"
+                    };
+                }
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = $"Login Successful! User ID: {user.Id} | Name: {user.Name} | Email: {user.Email}"
                 };
             }
             catch (Exception ex)

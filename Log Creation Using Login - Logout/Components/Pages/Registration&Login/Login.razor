@@ -1,8 +1,66 @@
 ﻿@page "/login"
+@using Log_Creation_Using_Login___Logout.Models
+@using Log_Creation_Using_Login___Logout.PanelService
+
+@inject AdminPanelService adminPanelService
+
 <div class="container">
     <h3>Login</h3>
+    <form @onsubmit="HandleLogin" @onsubmit:preventDefault="true">
+        <label>Email:</label>
+        <input type="email" @bind="loginModel.EmailId" required disabled="@isProcessing" />
+
+        <label>Password:</label>
+        <input type="password" @bind="loginModel.Password" required disabled="@isProcessing" />
+
+        <button type="submit" disabled="@isProcessing">
+            @if (isProcessing)
+            {
+                <text>Logging in...</text>
+            }
+            else
+            {
+                <text>Login</text>
+            }
+        </button>
+
+        @if (!string.IsNullOrEmpty(alertMessage))
+        {
+            <div class="alert @(isSuccess ? "alert-success" : "alert-danger")">@alertMessage</div>
+        }
+    </form>
+
+    <p>Don't Have An Account <a href="/register">Register</a></p>
 </div>
 
 @code {
+    private LoginModel loginModel = new();
+    private string alertMessage = string.Empty;
+    private bool isProcessing = false;
+    private bool isSuccess = false;
 
+    private async Task HandleLogin()
+    {
+        if (isProcessing) return;
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var response = await adminPanelService.Login(loginModel);
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"An error occurred: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
 }
