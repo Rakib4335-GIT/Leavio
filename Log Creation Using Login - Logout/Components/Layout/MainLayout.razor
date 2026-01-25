@@ -1,15 +1,23 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager navigation
 
 <div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+    <header class="header">
+        <div>
+            <img src="Images/logo.jpg" alt="Logo" class="logo">
+            <span class="header-title">Experiment</span>
         </div>
 
+
+        <div class="header-button">
+            <button @onclick="NavigateToLogin" class="btn btn-primary">Login</button>
+            <button @onclick="NavigateToRegister" class="btn btn-danger">Register</button>
+        </div>
+
+    </header>
+
+    <main>
         <article class="content px-4">
             @Body
         </article>
@@ -21,3 +29,15 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+
+@code {
+    private void NavigateToLogin()
+    {
+        navigation.NavigateTo("/login");
+    }
+    private void NavigateToRegister()
+    {
+        navigation.NavigateTo("/register");
+    }
+}
