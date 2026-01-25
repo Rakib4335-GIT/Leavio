@@ -2,10 +2,11 @@
 @using Log_Creation_Using_Login___Logout.Models
 @using Log_Creation_Using_Login___Logout.PanelService
 @using Blazored.SessionStorage
+@using Microsoft.AspNetCore.Components
 
 @inject AdminPanelService adminPanelService
 @inject ISessionStorageService sessionStorage
-@inject NavigationManager Navigation
+@inject NavigationManager navigation
 
 <div class="login-page">
     <div class="login-card">
@@ -108,21 +109,22 @@
 
             if (response.Success)
             {
-                var userResponse = response.Message.Split("/");
-
-                if (userResponse.Length >= 3)
+                // Parse the message: "Login Successful! User ID: {id} | Name: {name} | Email: {email}"
+                var parts = response.Message.Split("|");
+                
+                if (parts.Length >= 3)
                 {
-                    await sessionStorage.SetItemAsync("adminKey", userResponse[0]);
-                    await sessionStorage.SetItemAsync("adminName", userResponse[1]);
-                    await sessionStorage.SetItemAsync("adminEmail", userResponse[2]);
+                    // Extract values after colons
+                    var idPart = parts[0].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var namePart = parts[1].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var emailPart = parts[2].Split(':').LastOrDefault()?.Trim() ?? "";
 
-                    Navigation.NavigateTo("/", forceLoad: true);
+                    await sessionStorage.SetItemAsync("adminId", idPart);
+                    await sessionStorage.SetItemAsync("adminName", namePart);
+                    await sessionStorage.SetItemAsync("adminEmail", emailPart);
                 }
-                else
-                {
-                    alertMessage = "Invalid response format";
-                    isSuccess = false;
-                }
+
+                navigation.NavigateTo("/", forceLoad: true);
             }
             else
             {

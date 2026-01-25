@@ -1,4 +1,6 @@
-﻿@inherits LayoutComponentBase
+﻿@using Blazored.SessionStorage
+@inject ISessionStorageService sessionStorage
+@inherits LayoutComponentBase
 @inject NavigationManager navigation
 
 <div class="page">
@@ -15,14 +17,22 @@
             <a href="/contact">Contact</a>
         </div>
 
-        @* <button @onclick="Logout" class="btn-danger btn-danger">
-            Logout
-        </button> *@
+
 
 
         <div class="header-button">
-            <button @onclick="NavigateToLogin" class="btn btn-primary">Login</button>
-            <button @onclick="NavigateToRegister" class="btn btn-danger">Register</button>
+            @if (isLoggedIn)
+            {
+                <span class="welcome-message">Welcome, @userName!</span>
+                <button @onclick="Logout" class="btn-danger btn-danger">Logout</button>
+
+            }
+            else
+            {
+                <button @onclick="NavigateToLogin" class="btn btn-primary">Login</button>
+                <button @onclick="NavigateToRegister" class="btn btn-danger">Register</button>
+            }
+
         </div>
 
     </header>
@@ -42,8 +52,28 @@
 
 
 @code {
+    private bool isLoggedIn = false;
+    private string userName = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var storedUserName = await sessionStorage.GetItemAsync<string>("adminName");
+            if (!string.IsNullOrEmpty(storedUserName))
+            {
+                isLoggedIn = true;
+                userName = storedUserName;
+                StateHasChanged();
+            }
+        }
+    }
+    
     private async Task Logout()
     {
+        await sessionStorage.ClearAsync();
+        isLoggedIn = false;
+        userName = string.Empty;
         navigation.NavigateTo("/login");
     }
 

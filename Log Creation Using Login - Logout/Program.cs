@@ -2,6 +2,7 @@ using Log_Creation_Using_Login___Logout.Components;
 using Log_Creation_Using_Login___Logout.DbModels;
 using Log_Creation_Using_Login___Logout.PanelService;
 using Microsoft.EntityFrameworkCore;
+using Blazored.SessionStorage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ builder.Services.AddDbContextFactory<RegesterServiceContext>(
     option => option.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<AdminPanelService>();
+builder.Services.AddBlazoredSessionStorage();
 
 var app = builder.Build();
 
