@@ -1,8 +1,10 @@
 ﻿@page "/register"
 @using Log_Creation_Using_Login___Logout.Models
 @using Log_Creation_Using_Login___Logout.PanelService
+@using Microsoft.AspNetCore.Components
 
 @inject AdminPanelService adminPanelService
+@inject NavigationManager navigation
 
 <div class="registration-page">
     <div class="registration-card">
@@ -27,8 +29,16 @@
                         <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                         <polyline points="22,6 12,13 2,6"></polyline>
                     </svg>
-                    <input type="email" id="email" @bind="registrationModel.Email" placeholder="Type your email" required disabled="@isProcessing" />
+                    <input type="email" id="email" @bind="registrationModel.Email" @bind:event="oninput" @bind:after="ValidateEmail" placeholder="Type your email" required disabled="@isProcessing" class="@(isEmailValid == false && !string.IsNullOrEmpty(registrationModel.Email) ? "input-invalid" : "")" />
                 </div>
+                @if (isEmailValid == false && !string.IsNullOrEmpty(registrationModel.Email))
+                {
+                    <span class="validation-error">Please enter a valid email address</span>
+                }
+                @if (isEmailValid == true && !string.IsNullOrEmpty(registrationModel.Email))
+                {
+                    <span class="validation-success">✓ Valid email</span>
+                }
             </div>
 
             <div class="input-group">
@@ -42,7 +52,7 @@
                 </div>
             </div>
 
-            <button type="submit" class="register-button" disabled="@isProcessing">
+            <button type="submit" class="register-button" disabled="@(isProcessing || isEmailValid == false)">
                 @if (isProcessing)
                 {
                     <text>Processing...</text>
@@ -97,10 +107,33 @@
     private string alertMessage = string.Empty;
     private bool isProcessing = false;
     private bool isSuccess = false;
+    private bool? isEmailValid = null;
+
+    private void ValidateEmail()
+    {
+        if (string.IsNullOrWhiteSpace(registrationModel.Email))
+        {
+            isEmailValid = null;
+            return;
+        }
+
+        // Email validation regex pattern
+        var emailPattern = @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$";
+        isEmailValid = System.Text.RegularExpressions.Regex.IsMatch(registrationModel.Email, emailPattern);
+    }
 
     private async Task HandleRegistration()
     {
         if (isProcessing) return;
+
+        // Validate email before submission
+        ValidateEmail();
+        if (isEmailValid == false)
+        {
+            alertMessage = "Please enter a valid email address";
+            isSuccess = false;
+            return;
+        }
 
         isProcessing = true;
         alertMessage = string.Empty;
@@ -115,6 +148,11 @@
             if (registrationResponse.Success)
             {
                 registrationModel = new RegistrationModel();
+                isEmailValid = null;
+                
+                // Show success message briefly, then redirect to login page
+                await Task.Delay(1500);
+                navigation.NavigateTo("/login", forceLoad: true);
             }
         }
         catch (Exception ex)

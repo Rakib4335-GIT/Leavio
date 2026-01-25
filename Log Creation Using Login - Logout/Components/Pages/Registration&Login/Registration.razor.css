@@ -89,6 +89,24 @@
     color: #999;
 }
 
+.input-wrapper input.input-invalid {
+    border-bottom-color: #dc3545;
+}
+
+.validation-error {
+    color: #dc3545;
+    font-size: 12px;
+    margin-top: 4px;
+    display: block;
+}
+
+.validation-success {
+    color: #28a745;
+    font-size: 12px;
+    margin-top: 4px;
+    display: block;
+}
+
 .register-button {
     width: 100%;
     padding: 14px;
