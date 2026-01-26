@@ -25,6 +25,17 @@ public partial class RegesterServiceContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AdminInfo>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__AdminInf__3214EC0780892F8E");
+
+            entity.ToTable("AdminInfo");
+
+            entity.Property(e => e.Email).HasMaxLength(255);
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Password).HasMaxLength(255);
+        });
+
         modelBuilder.Entity<Role>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Role__3214EC07");
@@ -37,17 +48,6 @@ public partial class RegesterServiceContext : DbContext
 
             entity.Property(e => e.Description)
                 .HasMaxLength(500);
-        });
-
-        modelBuilder.Entity<AdminInfo>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__AdminInf__3214EC0780892F8E");
-
-            entity.ToTable("AdminInfo");
-
-            entity.Property(e => e.Email).HasMaxLength(255);
-            entity.Property(e => e.Name).HasMaxLength(100);
-            entity.Property(e => e.Password).HasMaxLength(255);
         });
 
         modelBuilder.Entity<UserRole>(entity =>
