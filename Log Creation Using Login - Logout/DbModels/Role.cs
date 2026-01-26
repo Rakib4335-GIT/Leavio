@@ -11,6 +11,6 @@ public partial class Role
 
     public string? Description { get; set; }
 
-    // Navigation property
-    public virtual ICollection<AdminInfo> AdminInfos { get; set; } = new List<AdminInfo>();
+    // Navigation property to User_Role (many-to-many through UserRole)
+    public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

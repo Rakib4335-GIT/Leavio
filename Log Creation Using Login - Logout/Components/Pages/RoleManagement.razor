@@ -3,12 +3,26 @@
 @using Log_Creation_Using_Login___Logout.PanelService
 @using Log_Creation_Using_Login___Logout.Models
 @using Microsoft.EntityFrameworkCore
+@using Blazored.SessionStorage
+@using Microsoft.AspNetCore.Components
 
 @inject AdminPanelService adminPanelService
 @inject IDbContextFactory<RegesterServiceContext> contextFactory
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
 
 <PageTitle>Role Management</PageTitle>
 
+@if (!isAuthorized)
+{
+    <div class="unauthorized-message">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page. Admin role required.</p>
+        <a href="/">Return to Home</a>
+    </div>
+}
+else
+{
 <div class="role-management-page">
     <div class="role-management-card">
         <h1 class="page-title">Role Management</h1>
@@ -85,6 +99,7 @@
         </div>
     </div>
 </div>
+}
 
 @code {
     private List<DbModels.Role> roles = new();
@@ -92,10 +107,33 @@
     private string alertMessage = string.Empty;
     private bool isProcessing = false;
     private bool isSuccess = false;
+    private bool isAuthorized = false;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadRoles();
+        await CheckAuthorization();
+        if (isAuthorized)
+        {
+            await LoadRoles();
+        }
+    }
+
+    private async Task CheckAuthorization()
+    {
+        var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
+        if (string.IsNullOrEmpty(storedUserRole))
+        {
+            // Not logged in, redirect to login
+            navigation.NavigateTo("/login");
+            return;
+        }
+
+        isAuthorized = string.Equals(storedUserRole, "Admin", StringComparison.OrdinalIgnoreCase);
+        if (!isAuthorized)
+        {
+            // Not an admin, stay on page but show access denied message
+            // (Navigation is handled by the UI)
+        }
     }
 
     private async Task LoadRoles()
@@ -170,8 +208,8 @@
         {
             using var context = await contextFactory.CreateDbContextAsync();
 
-            // Check if role is being used by any users
-            var usersWithRole = await context.AdminInfos.AnyAsync(a => a.RoleId == roleId);
+            // Check if role is being used by any users (check User_Role table)
+            var usersWithRole = await context.UserRoles.AnyAsync(ur => ur.RoleId == roleId);
             if (usersWithRole)
             {
                 alertMessage = "Cannot delete role. It is assigned to one or more users.";

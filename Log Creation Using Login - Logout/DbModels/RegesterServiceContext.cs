@@ -17,6 +17,7 @@ public partial class RegesterServiceContext : DbContext
 
     public virtual DbSet<AdminInfo> AdminInfos { get; set; }
     public virtual DbSet<Role> Roles { get; set; }
+    public virtual DbSet<UserRole> UserRoles { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -47,14 +48,34 @@ public partial class RegesterServiceContext : DbContext
             entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.Password).HasMaxLength(255);
+        });
+
+        modelBuilder.Entity<UserRole>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__UserRole__3214EC07");
+
+            entity.ToTable("User_Role");
+
+            entity.Property(e => e.UserId).IsRequired();
             entity.Property(e => e.RoleId).IsRequired();
 
-            // Configure foreign key relationship
+            // Configure foreign key relationships
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_UserRole_AdminInfo");
+
             entity.HasOne(d => d.Role)
-                .WithMany(p => p.AdminInfos)
+                .WithMany(r => r.UserRoles)
                 .HasForeignKey(d => d.RoleId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("FK_AdminInfo_Role");
+                .HasConstraintName("FK_UserRole_Role");
+
+            // Create unique index to prevent duplicate user-role assignments
+            entity.HasIndex(e => new { e.UserId, e.RoleId })
+                .IsUnique()
+                .HasDatabaseName("IX_UserRole_UserId_RoleId");
         });
 
         OnModelCreatingPartial(modelBuilder);

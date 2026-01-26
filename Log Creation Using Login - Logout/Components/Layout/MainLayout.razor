@@ -15,9 +15,10 @@
             <a href="/">Home</a>
             <a href="/aboutUs">About Us</a>
             <a href="/contact">Contact</a>
-            @if (isLoggedIn)
+            @if (isLoggedIn && isAdmin)
             {
                 <a href="/role-management">Role Management</a>
+                <a href="/user-role-management">User Roles</a>
             }
         </div>
 
@@ -59,6 +60,7 @@
     private bool isLoggedIn = false;
     private string userName = string.Empty;
     private string userRole = string.Empty;
+    private bool isAdmin = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -71,6 +73,7 @@
                 isLoggedIn = true;
                 userName = storedUserName;
                 userRole = storedUserRole ?? "User";
+                isAdmin = string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
                 StateHasChanged();
             }
         }
@@ -82,6 +85,7 @@
         isLoggedIn = false;
         userName = string.Empty;
         userRole = string.Empty;
+        isAdmin = false;
         navigation.NavigateTo("/login");
     }
 

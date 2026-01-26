@@ -1,0 +1,246 @@
+@page "/user-role-management"
+@using Log_Creation_Using_Login___Logout.DbModels
+@using Log_Creation_Using_Login___Logout.PanelService
+@using Log_Creation_Using_Login___Logout.Models
+@using Microsoft.EntityFrameworkCore
+@using Blazored.SessionStorage
+@using Microsoft.AspNetCore.Components
+
+@inject AdminPanelService adminPanelService
+@inject IDbContextFactory<RegesterServiceContext> contextFactory
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
+
+<PageTitle>User Role Management</PageTitle>
+
+@if (!isAuthorized)
+{
+    <div class="unauthorized-message">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page. Admin role required.</p>
+        <a href="/">Return to Home</a>
+    </div>
+}
+else
+{
+<div class="user-role-management-page">
+    <div class="user-role-management-card">
+        <h1 class="page-title">User Role Management</h1>
+        <p class="page-subtitle">View and manage user-role assignments</p>
+
+        <!-- Assign Role Section -->
+        <div class="assign-role-section">
+            <h2>Assign Role to User</h2>
+            <form @onsubmit="HandleAssignRole" @onsubmit:preventDefault="true" class="assign-role-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="selectedUser">Select User</label>
+                        <select id="selectedUser" @bind="selectedUserId" class="form-control" disabled="@isProcessing" required>
+                            <option value="0">-- Select User --</option>
+                            @foreach (var user in allUsers)
+                            {
+                                <option value="@user.Id">@user.Name (@user.Email)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="selectedRole">Select Role</label>
+                        <select id="selectedRole" @bind="selectedRoleId" class="form-control" disabled="@isProcessing" required>
+                            <option value="0">-- Select Role --</option>
+                            @foreach (var role in allRoles)
+                            {
+                                <option value="@role.Id">@role.RoleName</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn-assign-role" disabled="@(isProcessing || selectedUserId == 0 || selectedRoleId == 0)">
+                    @if (isProcessing)
+                    {
+                        <text>Assigning...</text>
+                    }
+                    else
+                    {
+                        <text>Assign Role</text>
+                    }
+                </button>
+            </form>
+        </div>
+
+        @if (!string.IsNullOrEmpty(alertMessage))
+        {
+            <div class="alert-message @(isSuccess ? "alert-success" : "alert-error")">
+                @alertMessage
+            </div>
+        }
+
+        <!-- User Roles Table -->
+        <div class="user-roles-section">
+            <h2>Current User-Role Assignments</h2>
+            @if (userRoles.Any())
+            {
+                <div class="table-container">
+                    <table class="user-roles-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>User Name</th>
+                                <th>Email</th>
+                                <th>Role Name</th>
+                                <th>Role Description</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var userRole in userRoles)
+                            {
+                                <tr>
+                                    <td>@userRole.Id</td>
+                                    <td>@userRole.User.Name</td>
+                                    <td>@userRole.User.Email</td>
+                                    <td>@userRole.Role.RoleName</td>
+                                    <td>@(userRole.Role.Description ?? "N/A")</td>
+                                    <td>
+                                        <button @onclick="() => RemoveRole(userRole.Id)" class="btn-remove" disabled="@isProcessing">Remove</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p class="no-assignments">No user-role assignments found. Please assign roles above.</p>
+            }
+        </div>
+
+        <div class="back-link">
+            <a href="/">Back to Home</a> | <a href="/role-management">Manage Roles</a>
+        </div>
+    </div>
+</div>
+}
+
+@code {
+    private List<UserRole> userRoles = new();
+    private List<AdminInfo> allUsers = new();
+    private List<DbModels.Role> allRoles = new();
+    private int selectedUserId = 0;
+    private int selectedRoleId = 0;
+    private string alertMessage = string.Empty;
+    private bool isProcessing = false;
+    private bool isSuccess = false;
+    private bool isAuthorized = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAuthorization();
+        if (isAuthorized)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task CheckAuthorization()
+    {
+        var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
+        if (string.IsNullOrEmpty(storedUserRole))
+        {
+            // Not logged in, redirect to login
+            navigation.NavigateTo("/login");
+            return;
+        }
+
+        isAuthorized = string.Equals(storedUserRole, "Admin", StringComparison.OrdinalIgnoreCase);
+        if (!isAuthorized)
+        {
+            // Not an admin, stay on page but show access denied message
+            // (Navigation is handled by the UI)
+        }
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            userRoles = await adminPanelService.GetAllUserRolesAsync();
+            allUsers = await adminPanelService.GetAllUsersAsync();
+            allRoles = await adminPanelService.GetAllRolesAsync();
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error loading data: {ex.Message}";
+            isSuccess = false;
+        }
+    }
+
+    private async Task HandleAssignRole()
+    {
+        if (isProcessing) return;
+
+        if (selectedUserId == 0 || selectedRoleId == 0)
+        {
+            alertMessage = "Please select both user and role.";
+            isSuccess = false;
+            return;
+        }
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var response = await adminPanelService.AssignRoleToUser(selectedUserId, selectedRoleId);
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+
+            if (response.Success)
+            {
+                selectedUserId = 0;
+                selectedRoleId = 0;
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error assigning role: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task RemoveRole(int userRoleId)
+    {
+        if (isProcessing) return;
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var response = await adminPanelService.RemoveRoleFromUser(userRoleId);
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+
+            if (response.Success)
+            {
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error removing role: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

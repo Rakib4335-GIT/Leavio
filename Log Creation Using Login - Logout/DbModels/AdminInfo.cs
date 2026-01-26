@@ -12,9 +12,4 @@ public partial class AdminInfo
     public string Email { get; set; } = null!;
 
     public string Password { get; set; } = null!;
-
-    public int RoleId { get; set; }
-
-    // Navigation property
-    public virtual Role Role { get; set; } = null!;
 }
