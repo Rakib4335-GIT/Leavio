@@ -135,8 +135,50 @@
     top: 0;
 }
 
+.user-roles-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+    position: relative;
+    padding-right: 25px;
+}
+
+.user-roles-table th.sortable:hover {
+    background-color: #e8e8e8;
+}
+
+.sort-icon {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: #667eea;
+    font-weight: bold;
+}
+
 .user-roles-table tr:hover {
     background-color: #f9f9f9;
+}
+
+.btn-edit {
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn-edit:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.btn-edit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .btn-remove {
@@ -270,13 +312,501 @@
     box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
+/* Add User Button */
+.btn-add-user {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    white-space: nowrap;
+}
+
+.btn-add-user:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+}
+
+.btn-add-user:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 10px;
+    padding: 0;
+    max-width: 500px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 30px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 24px;
+    color: #333;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: color 0.3s;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+.add-user-form {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.btn-cancel {
+    padding: 10px 20px;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn-cancel:hover:not(:disabled) {
+    background: #5a6268;
+}
+
+.btn-cancel:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-submit {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-submit:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Pagination Styles */
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.pagination-info {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.pagination-controls {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.pagination-btn {
+    padding: 8px 12px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    color: #333;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-width: 40px;
+    text-align: center;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background-color: #667eea;
+    color: white;
+    border-color: #667eea;
+}
+
+.pagination-btn.active {
+    background-color: #667eea;
+    color: white;
+    border-color: #667eea;
+    font-weight: bold;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f5f5f5;
+}
+
+.pagination-page-size {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pagination-page-size label {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.page-size-select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.page-size-select:focus {
+    border-color: #667eea;
+}
+
+.page-size-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* Responsive Design */
+@media (max-width: 1024px) {
+    .user-role-management-page {
+        padding: 15px;
+    }
+
+    .user-role-management-card {
+        padding: 25px;
+    }
+}
+
 @media (max-width: 768px) {
+    .user-role-management-page {
+        padding: 10px;
+    }
+
+    .user-role-management-card {
+        padding: 20px;
+    }
+
+    .page-title {
+        font-size: 24px;
+        margin-bottom: 20px;
+    }
+
+    .page-subtitle {
+        font-size: 13px;
+    }
+
+    .assign-role-section h2,
+    .user-roles-section h2 {
+        font-size: 18px;
+    }
+
     .form-row {
         grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+    }
+
+    .form-control {
+        font-size: 13px;
+        padding: 8px;
+    }
+
+    .btn-assign-role {
+        padding: 10px 20px;
+        font-size: 14px;
+        width: 100%;
+    }
+
+    .btn-add-user {
+        padding: 8px 16px;
+        font-size: 13px;
     }
 
     .table-container {
-        overflow-x: scroll;
+        overflow-x: auto;
+    }
+
+    .user-roles-table {
+        font-size: 13px;
+        min-width: 700px;
+    }
+
+    .user-roles-table th,
+    .user-roles-table td {
+        padding: 8px;
+    }
+
+    .btn-edit,
+    .btn-remove {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
+
+    .modal-content {
+        max-width: 95%;
+        margin: 10px;
+    }
+
+    .modal-header {
+        padding: 15px 20px;
+    }
+
+    .modal-header h2 {
+        font-size: 20px;
+    }
+
+    .add-user-form {
+        padding: 20px;
+    }
+
+    .pagination-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .pagination-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+        min-width: 35px;
+    }
+
+    .pagination-info {
+        text-align: center;
+        font-size: 12px;
+    }
+
+    .pagination-page-size {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .pagination-page-size label {
+        font-size: 12px;
+    }
+
+    .page-size-select {
+        font-size: 12px;
+        padding: 5px 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .user-role-management-page {
+        padding: 5px;
+    }
+
+    .user-role-management-card {
+        padding: 15px;
+    }
+
+    .page-title {
+        font-size: 20px;
+        margin-bottom: 15px;
+    }
+
+    .page-subtitle {
+        font-size: 12px;
+    }
+
+    .assign-role-section {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+    }
+
+    .assign-role-section h2,
+    .user-roles-section h2 {
+        font-size: 16px;
+        margin-bottom: 15px;
+    }
+
+    .form-control {
+        font-size: 12px;
+        padding: 7px;
+    }
+
+    .btn-assign-role {
+        padding: 9px 18px;
+        font-size: 13px;
+    }
+
+    .btn-add-user {
+        padding: 7px 14px;
+        font-size: 12px;
+    }
+
+    .user-roles-table {
+        font-size: 12px;
+        min-width: 600px;
+    }
+
+    .user-roles-table th,
+    .user-roles-table td {
+        padding: 6px 4px;
+    }
+
+    .btn-edit,
+    .btn-remove {
+        padding: 4px 8px;
+        font-size: 10px;
+    }
+
+    .modal-content {
+        max-width: 100%;
+        margin: 5px;
+        max-height: 95vh;
+    }
+
+    .modal-header {
+        padding: 12px 15px;
+    }
+
+    .modal-header h2 {
+        font-size: 18px;
+    }
+
+    .add-user-form {
+        padding: 15px;
+        gap: 15px;
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+
+    .btn-cancel,
+    .btn-submit {
+        width: 100%;
+    }
+
+    .pagination-container {
+        padding: 10px;
+    }
+
+    .pagination-btn {
+        padding: 5px 8px;
+        font-size: 11px;
+        min-width: 30px;
+    }
+
+    .pagination-info {
+        font-size: 11px;
+    }
+
+    .loading-message,
+    .unauthorized-message {
+        padding: 20px;
+        margin: 20px auto;
+    }
+
+    .unauthorized-message h2 {
+        font-size: 20px;
+    }
+
+    .unauthorized-message p {
+        font-size: 14px;
+    }
+
+    .unauthorized-message a {
+        padding: 10px 20px;
+        font-size: 14px;
     }
 }

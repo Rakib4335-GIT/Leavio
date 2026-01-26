@@ -11,18 +11,33 @@
     <div class="registration-card">
         <h1 class="registration-title">Registration</h1>
         
-        <form @onsubmit="HandleRegistration" @onsubmit:preventDefault="true" class="registration-form">
-            <div class="input-group">
-                <label for="name">Name</label>
-                <div class="input-wrapper">
-                    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    <input type="text" id="name" @bind="registrationModel.Name" placeholder="Type your name" required disabled="@isProcessing" />
+        <form @onsubmit="HandleRegistration" @onsubmit:preventDefault="true" class="registration-form" autocomplete="off">
+            @* First Row: User ID and Name *@
+            <div class="form-row">
+                <div class="input-group">
+                    <label for="userId">User ID</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <input type="text" id="userId" name="userId" @bind="registrationModel.UserId" placeholder="Type your User ID" required disabled="@isProcessing" autocomplete="off" data-lpignore="true" data-form-type="other" />
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="name">Name</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <input type="text" id="name" name="name" @bind="registrationModel.Name" placeholder="Type your name" required disabled="@isProcessing" autocomplete="name" />
+                    </div>
                 </div>
             </div>
 
+            @* Second Row: Email (single row) *@
             <div class="input-group">
                 <label for="email">Email</label>
                 <div class="input-wrapper">
@@ -30,7 +45,7 @@
                         <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                         <polyline points="22,6 12,13 2,6"></polyline>
                     </svg>
-                    <input type="email" id="email" @bind="registrationModel.Email" @bind:event="oninput" @bind:after="ValidateEmail" placeholder="Type your email" required disabled="@isProcessing" class="@(isEmailValid == false && !string.IsNullOrEmpty(registrationModel.Email) ? "input-invalid" : "")" />
+                    <input type="email" id="email" @bind="registrationModel.Email" @bind:event="oninput" @bind:after="ValidateEmail" placeholder="Type your email" required disabled="@isProcessing" class="@(isEmailValid == false && !string.IsNullOrEmpty(registrationModel.Email) ? "input-invalid" : "")" autocomplete="email" />
                 </div>
                 @if (isEmailValid == false && !string.IsNullOrEmpty(registrationModel.Email))
                 {
@@ -42,18 +57,66 @@
                 }
             </div>
 
-            <div class="input-group">
-                <label for="password">Password</label>
-                <div class="input-wrapper">
-                    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                    <input type="password" id="password" @bind="registrationModel.Password" placeholder="Type your password" required disabled="@isProcessing" />
+            @* Third Row: Password and CAPTCHA *@
+            <div class="form-row">
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <input type="password" id="password" @bind="registrationModel.Password" placeholder="Type your password" required disabled="@isProcessing" autocomplete="new-password" />
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="captcha">CAPTCHA</label>
+                    <div class="captcha-container">
+                        <div class="captcha-display">
+                            <div class="captcha-image" @ref="captchaContainer" style="@GetCaptchaBackgroundStyle()">
+                                @* Background noise dots *@
+                                @foreach (var dot in captchaDots)
+                                {
+                                    <div class="captcha-dot" style="@dot"></div>
+                                }
+                                @* Noise lines *@
+                                @foreach (var line in captchaLines)
+                                {
+                                    <div class="captcha-line" style="@line"></div>
+                                }
+                                @* CAPTCHA characters *@
+                                @for (int i = 0; i < captchaText.Length; i++)
+                                {
+                                    var charIndex = i;
+                                    var charValue = captchaText[i];
+                                    <span class="captcha-char" style="@GetCaptchaCharStyle(charIndex)">@charValue</span>
+                                }
+                            </div>
+                            <button type="button" @onclick="GenerateCaptcha" class="captcha-refresh" title="Refresh CAPTCHA" disabled="@isProcessing">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            <input type="text" id="captcha" @bind="captchaAnswer" placeholder="Enter the characters above" required disabled="@isProcessing" class="@(captchaError ? "input-invalid" : "")" autocomplete="off" />
+                        </div>
+                        @if (captchaError)
+                        {
+                            <span class="validation-error">Incorrect CAPTCHA. Please try again.</span>
+                        }
+                    </div>
                 </div>
             </div>
 
-            <div class="input-group">
+            <div class="input-group" style="display: none;">
                 <label for="role">Role</label>
                 <div class="input-wrapper">
                     <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -62,17 +125,17 @@
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                     </svg>
-                    <select id="role" @bind="registrationModel.RoleId" class="role-select" disabled="@isProcessing">
-                        <option value="0">-- Select Role --</option>
+                    <select id="role" @bind="registrationModel.RoleId" @bind:event="onchange" class="role-select" disabled="@isProcessing">
+                        <option value="">-- Select Role --</option>
                         @foreach (var role in availableRoles)
                         {
-                            <option value="@role.Id">@role.RoleName</option>
+                            <option value="@role.Id.ToString()">@role.RoleName</option>
                         }
                     </select>
                 </div>
             </div>
 
-            <button type="submit" class="register-button" disabled="@(isProcessing || (isEmailValid == false) || registrationModel.RoleId == 0)">
+            <button type="submit" class="register-button" disabled="@(isProcessing || (isEmailValid == false))">
                 @if (isProcessing)
                 {
                     <text>Processing...</text>
@@ -129,19 +192,22 @@
     private bool isSuccess = false;
     private bool? isEmailValid = null;
     private List<DbModels.Role> availableRoles = new();
+    
+    // CAPTCHA variables
+    private Random random = new Random();
+    private string captchaText = "";
+    private string captchaAnswer = "";
+    private bool captchaError = false;
+    private List<string> captchaLines = new();
+    private List<string> captchaDots = new();
+    private string captchaBackgroundStyle = "";
+    private Microsoft.AspNetCore.Components.ElementReference? captchaContainer;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await LoadRoles();
-    }
-
-    private async Task LoadRoles()
-    {
-        availableRoles = await adminPanelService.GetAllRolesAsync();
-        if (availableRoles.Any() && registrationModel.RoleId == 0)
-        {
-            registrationModel.RoleId = availableRoles.First().Id;
-        }
+        GenerateCaptcha();
+        // Roles are not needed since role field is hidden - this improves page load time
+        availableRoles = new List<DbModels.Role>();
     }
 
     private void ValidateEmail()
@@ -161,18 +227,27 @@
     {
         if (isProcessing) return;
 
+        // Validate CAPTCHA first
+        if (!ValidateCaptcha())
+        {
+            GenerateCaptcha(); // Generate new CAPTCHA on error
+            return;
+        }
+
         // Validate email before submission
         ValidateEmail();
         if (isEmailValid == false)
         {
             alertMessage = "Please enter a valid email address";
             isSuccess = false;
+            GenerateCaptcha(); // Generate new CAPTCHA on error
             return;
         }
 
         isProcessing = true;
         alertMessage = string.Empty;
         isSuccess = false;
+        captchaError = false;
 
         try
         {
@@ -184,20 +259,115 @@
             {
                 registrationModel = new RegistrationModel();
                 isEmailValid = null;
+                GenerateCaptcha(); // Generate new CAPTCHA after success
                 
                 // Show success message briefly, then redirect to login page
                 await Task.Delay(1500);
                 navigation.NavigateTo("/login", forceLoad: true);
+            }
+            else
+            {
+                GenerateCaptcha(); // Generate new CAPTCHA on registration failure
             }
         }
         catch (Exception ex)
         {
             alertMessage = $"An error occurred: {ex.Message}";
             isSuccess = false;
+            GenerateCaptcha(); // Generate new CAPTCHA on error
         }
         finally
         {
             isProcessing = false;
         }
+    }
+
+    private void GenerateCaptcha()
+    {
+        // Generate random 6-character CAPTCHA (alphanumeric, excluding confusing characters)
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        captchaText = new string(Enumerable.Range(0, 6)
+            .Select(_ => chars[random.Next(chars.Length)])
+            .ToArray());
+        
+        // Generate background noise pattern
+        captchaBackgroundStyle = GenerateNoiseBackground();
+        
+        // Generate random noise dots
+        captchaDots = new List<string>();
+        for (int i = 0; i < 150; i++)
+        {
+            var x = random.Next(0, 200);
+            var y = random.Next(0, 60);
+            var size = random.Next(1, 3);
+            var grayValue = random.Next(100, 200);
+            captchaDots.Add($"position:absolute;left:{x}px;top:{y}px;width:{size}px;height:{size}px;background:rgb({grayValue},{grayValue},{grayValue});border-radius:50%;");
+        }
+        
+        // Generate random lines for noise (grayscale)
+        captchaLines = new List<string>();
+        for (int i = 0; i < 12; i++)
+        {
+            var x1 = random.Next(0, 200);
+            var y1 = random.Next(0, 60);
+            var x2 = random.Next(0, 200);
+            var y2 = random.Next(0, 60);
+            var grayValue = random.Next(120, 180);
+            var width = random.Next(1, 2);
+            var opacity = random.Next(30, 70) / 100.0;
+            captchaLines.Add($"position:absolute;left:{x1}px;top:{y1}px;width:{Math.Abs(x2-x1)}px;height:{width}px;background:rgb({grayValue},{grayValue},{grayValue});transform:rotate({random.Next(-45, 45)}deg);opacity:{opacity};");
+        }
+        
+        captchaAnswer = "";
+        captchaError = false;
+    }
+
+    private string GenerateNoiseBackground()
+    {
+        // Create a noisy grayscale background pattern
+        var baseGray = random.Next(220, 240);
+        return $"background: linear-gradient(135deg, rgb({baseGray},{baseGray},{baseGray}) 0%, rgb({baseGray-10},{baseGray-10},{baseGray-10}) 100%);";
+    }
+
+    private string GetCaptchaBackgroundStyle()
+    {
+        return captchaBackgroundStyle;
+    }
+
+    private string GetCaptchaCharStyle(int index)
+    {
+        var rotation = random.Next(-30, 30);
+        var fontSize = random.Next(22, 30);
+        var xOffset = index * 28 + random.Next(-3, 3);
+        var yOffset = random.Next(-10, 10);
+        
+        // Grayscale color for characters (dark gray)
+        var grayValue = random.Next(30, 80);
+        var charColor = $"rgb({grayValue},{grayValue},{grayValue})";
+        
+        // Add some skew for distortion
+        var skewX = random.Next(-5, 5);
+        var skewY = random.Next(-2, 2);
+        
+        return $"position:absolute;left:{xOffset}px;top:{15 + yOffset}px;transform:rotate({rotation}deg) skew({skewX}deg, {skewY}deg);font-size:{fontSize}px;color:{charColor};font-weight:bold;font-family:'Arial', sans-serif;z-index:3;text-shadow: 1px 1px 2px rgba(0,0,0,0.3);letter-spacing:2px;";
+    }
+
+    private bool ValidateCaptcha()
+    {
+        if (string.IsNullOrWhiteSpace(captchaAnswer))
+        {
+            captchaError = true;
+            return false;
+        }
+
+        // Case-insensitive comparison
+        if (string.Equals(captchaAnswer.Trim(), captchaText, StringComparison.OrdinalIgnoreCase))
+        {
+            captchaError = false;
+            return true;
+        }
+        
+        captchaError = true;
+        return false;
     }
 }

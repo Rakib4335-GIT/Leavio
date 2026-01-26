@@ -10,7 +10,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddDbContextFactory<RegesterServiceContext>(
-    option => option.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    option => option.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorNumbersToAdd: null);
+            sqlOptions.CommandTimeout(30);
+        })
+    .EnableSensitiveDataLogging(false)
+    .EnableServiceProviderCaching());
 
 builder.Services.AddScoped<AdminPanelService>();
 builder.Services.AddBlazoredSessionStorage();

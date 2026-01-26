@@ -7,11 +7,10 @@ public partial class UserRole
 {
     public int Id { get; set; }
 
-    public int UserId { get; set; }
+    public string UserId { get; set; } = null!;
 
     public int RoleId { get; set; }
 
     // Navigation properties
-    public virtual AdminInfo User { get; set; } = null!;
     public virtual Role Role { get; set; } = null!;
 }

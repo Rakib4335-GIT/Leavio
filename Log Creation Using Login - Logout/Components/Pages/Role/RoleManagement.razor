@@ -181,7 +181,9 @@ else
             using var context = await contextFactory.CreateDbContextAsync();
 
             // Check if role name already exists
-            var existingRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == newRole.RoleName.ToLower());
+            var existingRole = await context.Roles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.RoleName.ToLower() == newRole.RoleName.ToLower());
             if (existingRole != null)
             {
                 alertMessage = "A role with this name already exists.";
@@ -191,6 +193,9 @@ else
 
             await context.Roles.AddAsync(newRole);
             await context.SaveChangesAsync();
+
+            // Invalidate roles cache
+            AdminPanelService.InvalidateRolesCache();
 
             alertMessage = "Role added successfully!";
             isSuccess = true;
@@ -220,7 +225,9 @@ else
         {
             using var context = await contextFactory.CreateDbContextAsync();
 
-            var usersWithRole = await context.UserRoles.AnyAsync(ur => ur.RoleId == roleId);
+            var usersWithRole = await context.UserRoles
+                .AsNoTracking()
+                .AnyAsync(ur => ur.RoleId == roleId);
             if (usersWithRole)
             {
                 alertMessage = "Cannot delete role. It is assigned to one or more users.";
@@ -233,7 +240,10 @@ else
             {
                 context.Roles.Remove(role);
                 await context.SaveChangesAsync();
-
+                
+                // Invalidate roles cache
+                AdminPanelService.InvalidateRolesCache();
+                
                 alertMessage = "Role deleted successfully!";
                 isSuccess = true;
                 await LoadRoles();

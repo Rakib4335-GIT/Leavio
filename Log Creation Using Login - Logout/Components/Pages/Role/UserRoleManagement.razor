@@ -42,13 +42,18 @@ else
                 <div class="form-row">
                     <div class="form-group">
                         <label for="selectedUser">Select User</label>
-                        <select id="selectedUser" @bind="selectedUserId" class="form-control" disabled="@isProcessing" required>
-                            <option value="0">-- Select User --</option>
-                            @foreach (var user in allUsers)
-                            {
-                                <option value="@user.Id">@user.Name (@user.Email)</option>
-                            }
-                        </select>
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <select id="selectedUser" @bind="selectedUserId" class="form-control" disabled="@isProcessing" required style="flex: 1;">
+                                <option value="0">-- Select User --</option>
+                                @foreach (var user in allUsers)
+                                {
+                                    <option value="@user.Id">@user.Name (@user.Email)</option>
+                                }
+                            </select>
+                            <button type="button" @onclick="ShowAddUserModal" class="btn-add-user" disabled="@isProcessing" title="Add New User">
+                                + Add
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="selectedRole">Select Role</label>
@@ -90,31 +95,120 @@ else
                     <table class="user-roles-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>User Name</th>
-                                <th>Email</th>
-                                <th>Role Name</th>
-                                <th>Role Description</th>
+                                <th>SL No.</th>
+                                <th class="sortable" @onclick='() => SortByColumn("UserId")'>
+                                    User Id
+                                    @if (sortColumn == "UserId")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th class="sortable" @onclick='() => SortByColumn("UserName")'>
+                                    User Name
+                                    @if (sortColumn == "UserName")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th class="sortable" @onclick='() => SortByColumn("Email")'>
+                                    Email
+                                    @if (sortColumn == "Email")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th class="sortable" @onclick='() => SortByColumn("RoleName")'>
+                                    Role Name
+                                    @if (sortColumn == "RoleName")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                @* <th>Role Description</th> *@
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var userRole in userRoles)
+                            @foreach (var item in paginatedUserRoles.Select((userRole, index) => new { userRole, index }))
                             {
+                                var user = GetUserByUserId(item.userRole.UserId);
+                                var serialNumber = (currentPage - 1) * pageSize + item.index + 1;
                                 <tr>
-                                    <td>@userRole.Id</td>
-                                    <td>@userRole.User.Name</td>
-                                    <td>@userRole.User.Email</td>
-                                    <td>@userRole.Role.RoleName</td>
-                                    <td>@(userRole.Role.Description ?? "N/A")</td>
+                                    <td>@serialNumber</td>
+                                    <td>@item.userRole.UserId</td>
+                                    <td>@(user?.Name ?? "N/A")</td>
+                                    <td>@(user?.Email ?? "N/A")</td>
+                                    <td>@item.userRole.Role.RoleName</td>
+                                    @* <td>@(item.userRole.Role.Description ?? "N/A")</td> *@
                                     <td>
-                                        <button @onclick="() => RemoveRole(userRole.Id)" class="btn-remove" disabled="@isProcessing">Remove</button>
+                                        <div style="display: flex; gap: 8px;">
+                                            <button @onclick="() => ShowEditUserModal(user)" class="btn-edit" disabled="@isProcessing" title="Edit User">Edit</button>
+                                            <button @onclick="() => RemoveRole(item.userRole.Id)" class="btn-remove" disabled="@isProcessing" title="Remove Role">Remove</button>
+                                        </div>
                                     </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- Pagination Controls -->
+                @if (totalPages > 0)
+                {
+                    <div class="pagination-container">
+                        <div class="pagination-info">
+                            Showing @((currentPage - 1) * pageSize + 1) to @(Math.Min(currentPage * pageSize, totalRecords)) of @totalRecords entries
+                        </div>
+                        <div class="pagination-controls">
+                            <button @onclick="GoToFirstPage" class="pagination-btn" disabled="@(currentPage == 1 || isProcessing)" title="First Page">
+                                &laquo;&laquo;
+                            </button>
+                            <button @onclick="GoToPreviousPage" class="pagination-btn" disabled="@(currentPage == 1 || isProcessing)" title="Previous">
+                                &laquo;
+                            </button>
+                            
+                            @for (int i = startPage; i <= endPage; i++)
+                            {
+                                var pageNum = i;
+                                <button @onclick="() => GoToPage(pageNum)" class="pagination-btn @(currentPage == pageNum ? "active" : "")" disabled="@isProcessing">
+                                    @pageNum
+                                </button>
+                            }
+                            
+                            <button @onclick="GoToNextPage" class="pagination-btn" disabled="@(currentPage == totalPages || isProcessing)" title="Next">
+                                &raquo;
+                            </button>
+                            <button @onclick="GoToLastPage" class="pagination-btn" disabled="@(currentPage == totalPages || isProcessing)" title="Last Page">
+                                &raquo;&raquo;
+                            </button>
+                        </div>
+                        <div class="pagination-page-size">
+                            <label for="pageSizeSelect">Items per page:</label>
+                            <select id="pageSizeSelect" @bind="pageSize" @bind:after="OnPageSizeChanged" class="page-size-select" disabled="@isProcessing">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                    </div>
+                }
             }
             else
             {
@@ -127,6 +221,106 @@ else
         </div>
     </div>
 </div>
+
+<!-- Add User Modal -->
+@if (showAddUserModal)
+{
+    <div class="modal-overlay" @onclick="CloseAddUserModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2>Add New User</h2>
+                <button type="button" @onclick="CloseAddUserModal" class="modal-close">&times;</button>
+            </div>
+            <form @onsubmit="HandleAddUser" @onsubmit:preventDefault="true" class="add-user-form" autocomplete="off">
+                <div class="form-group">
+                    <label for="newUserId">User ID</label>
+                    <input type="text" id="newUserId" name="newUserId" @bind="newUser.UserId" placeholder="Enter User ID" required disabled="@isProcessing" class="form-control" autocomplete="off" data-lpignore="true" data-form-type="other" />
+                </div>
+                <div class="form-group">
+                    <label for="newUserName">Name</label>
+                    <input type="text" id="newUserName" name="newUserName" @bind="newUser.Name" placeholder="Enter Name" required disabled="@isProcessing" class="form-control" autocomplete="name" />
+                </div>
+                <div class="form-group">
+                    <label for="newUserEmail">Email</label>
+                    <input type="email" id="newUserEmail" name="newUserEmail" @bind="newUser.Email" placeholder="Enter Email" required disabled="@isProcessing" class="form-control" autocomplete="email" />
+                </div>
+                <div class="form-group">
+                    <label for="newUserPassword">Password</label>
+                    <input type="password" id="newUserPassword" name="newUserPassword" @bind="newUser.Password" placeholder="Enter Password" required disabled="@isProcessing" class="form-control" autocomplete="new-password" />
+                </div>
+                <div class="modal-actions">
+                    <button type="button" @onclick="CloseAddUserModal" class="btn-cancel" disabled="@isProcessing">Cancel</button>
+                    <button type="submit" class="btn-submit" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <text>Adding...</text>
+                        }
+                        else
+                        {
+                            <text>Add User</text>
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+<!-- Edit User Modal -->
+@if (showEditUserModal)
+{
+    <div class="modal-overlay" @onclick="CloseEditUserModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2>Edit User</h2>
+                <button type="button" @onclick="CloseEditUserModal" class="modal-close">&times;</button>
+            </div>
+            <form @onsubmit="HandleEditUser" @onsubmit:preventDefault="true" class="add-user-form" autocomplete="off">
+                <div class="form-group">
+                    <label for="editUserId">User ID</label>
+                    <input type="text" id="editUserId" name="editUserId" @bind="editUser.UserId" placeholder="Enter User ID" required disabled="true" class="form-control" style="background-color: #f5f5f5;" autocomplete="off" />
+                    <small style="color: #666; font-size: 12px;">User ID cannot be changed</small>
+                </div>
+                <div class="form-group">
+                    <label for="editUserName">Name</label>
+                    <input type="text" id="editUserName" name="editUserName" @bind="editUser.Name" placeholder="Enter Name" required disabled="@isProcessing" class="form-control" autocomplete="name" />
+                </div>
+                <div class="form-group">
+                    <label for="editUserEmail">Email</label>
+                    <input type="email" id="editUserEmail" name="editUserEmail" @bind="editUser.Email" placeholder="Enter Email" required disabled="@isProcessing" class="form-control" autocomplete="email" />
+                </div>
+                <div class="form-group">
+                    <label for="editUserPassword">Password</label>
+                    <input type="password" id="editUserPassword" name="editUserPassword" @bind="editUser.Password" placeholder="Leave blank to keep current password" disabled="@isProcessing" class="form-control" autocomplete="new-password" />
+                    <small style="color: #666; font-size: 12px;">Leave blank to keep current password</small>
+                </div>
+                <div class="form-group">
+                    <label for="editUserRole">Role</label>
+                    <select id="editUserRole" @bind="editUserRoleId" class="form-control" disabled="@isProcessing" required>
+                        <option value="0">-- Select Role --</option>
+                        @foreach (var role in allRoles)
+                        {
+                            <option value="@role.Id">@role.RoleName</option>
+                        }
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" @onclick="CloseEditUserModal" class="btn-cancel" disabled="@isProcessing">Cancel</button>
+                    <button type="submit" class="btn-submit" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <text>Updating...</text>
+                        }
+                        else
+                        {
+                            <text>Update User</text>
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
 }
 
 @code {
@@ -140,6 +334,69 @@ else
     private bool isSuccess = false;
     private bool isAuthorized = false;
     private bool isCheckingAuth = true;
+    private bool showAddUserModal = false;
+    private bool showEditUserModal = false;
+    private RegistrationModel newUser = new();
+    private RegistrationModel editUser = new();
+    private string? editingUserId = null;
+    private int editUserRoleId = 0;
+    
+    // Pagination variables
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private string sortColumn = "UserId";
+    private string sortDirection = "asc";
+    private int totalPages => (int)Math.Ceiling((double)sortedUserRoles.Count() / pageSize);
+    private int totalRecords => sortedUserRoles.Count();
+    private int startPage => Math.Max(1, currentPage - 2);
+    private int endPage => Math.Min(totalPages, currentPage + 2);
+    
+    // Sorted data
+    private IEnumerable<UserRole> sortedUserRoles
+    {
+        get
+        {
+            var sorted = userRoles.AsEnumerable();
+            
+            // Materialize with user data for sorting
+            var userRolesWithUserData = sorted.Select(ur => new
+            {
+                UserRole = ur,
+                User = GetUserByUserId(ur.UserId)
+            }).ToList();
+            
+            switch (sortColumn)
+            {
+                case "UserId":
+                    sorted = sortDirection == "asc" 
+                        ? userRolesWithUserData.OrderBy(x => x.UserRole.UserId ?? "").Select(x => x.UserRole)
+                        : userRolesWithUserData.OrderByDescending(x => x.UserRole.UserId ?? "").Select(x => x.UserRole);
+                    break;
+                case "UserName":
+                    sorted = sortDirection == "asc"
+                        ? userRolesWithUserData.OrderBy(x => x.User?.Name ?? "N/A").Select(x => x.UserRole)
+                        : userRolesWithUserData.OrderByDescending(x => x.User?.Name ?? "N/A").Select(x => x.UserRole);
+                    break;
+                case "Email":
+                    sorted = sortDirection == "asc"
+                        ? userRolesWithUserData.OrderBy(x => x.User?.Email ?? "N/A").Select(x => x.UserRole)
+                        : userRolesWithUserData.OrderByDescending(x => x.User?.Email ?? "N/A").Select(x => x.UserRole);
+                    break;
+                case "RoleName":
+                    sorted = sortDirection == "asc"
+                        ? userRolesWithUserData.OrderBy(x => x.UserRole.Role?.RoleName ?? "").Select(x => x.UserRole)
+                        : userRolesWithUserData.OrderByDescending(x => x.UserRole.Role?.RoleName ?? "").Select(x => x.UserRole);
+                    break;
+            }
+            
+            return sorted;
+        }
+    }
+    
+    // Paginated data
+    private IEnumerable<UserRole> paginatedUserRoles => sortedUserRoles
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -181,6 +438,16 @@ else
             userRoles = await adminPanelService.GetAllUserRolesAsync();
             allUsers = await adminPanelService.GetAllUsersAsync();
             allRoles = await adminPanelService.GetAllRolesAsync();
+            
+            // Adjust current page if it's beyond total pages
+            if (currentPage > totalPages && totalPages > 0)
+            {
+                currentPage = totalPages;
+            }
+            else if (totalPages == 0)
+            {
+                currentPage = 1;
+            }
         }
         catch (Exception ex)
         {
@@ -215,6 +482,11 @@ else
                 selectedUserId = 0;
                 selectedRoleId = 0;
                 await LoadData();
+                // Go to last page to see the newly added assignment
+                if (totalPages > 0)
+                {
+                    currentPage = totalPages;
+                }
             }
         }
         catch (Exception ex)
@@ -245,6 +517,11 @@ else
             if (response.Success)
             {
                 await LoadData();
+                // Reset to first page if current page is empty after deletion
+                if (currentPage > totalPages && totalPages > 0)
+                {
+                    currentPage = totalPages;
+                }
             }
         }
         catch (Exception ex)
@@ -256,5 +533,272 @@ else
         {
             isProcessing = false;
         }
+    }
+
+    private AdminInfo? GetUserByUserId(string userId)
+    {
+        return allUsers.FirstOrDefault(u => u.UserId == userId);
+    }
+
+    private void ShowAddUserModal()
+    {
+        if (!isProcessing)
+        {
+            // Clear the form to prevent autofill
+            newUser = new RegistrationModel();
+            showAddUserModal = true;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseAddUserModal()
+    {
+        if (!isProcessing)
+        {
+            // Clear the form when closing
+            newUser = new RegistrationModel();
+            showAddUserModal = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleAddUser()
+    {
+        if (isProcessing) return;
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var response = await adminPanelService.Register(newUser);
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+
+            if (response.Success)
+            {
+                showAddUserModal = false;
+                newUser = new RegistrationModel();
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error adding user: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void ShowEditUserModal(AdminInfo? user)
+    {
+        if (user == null || string.IsNullOrEmpty(user.UserId)) return;
+
+        editingUserId = user.UserId;
+        editUser = new RegistrationModel
+        {
+            UserId = user.UserId,
+            Name = user.Name ?? string.Empty,
+            Email = user.Email ?? string.Empty,
+            Password = string.Empty // Password is optional for editing
+        };
+        
+        // Get current role for the user
+        var currentUserRole = userRoles.FirstOrDefault(ur => ur.UserId == user.UserId);
+        editUserRoleId = currentUserRole?.RoleId ?? 0;
+        
+        showEditUserModal = true;
+    }
+
+    private void CloseEditUserModal()
+    {
+        if (!isProcessing)
+        {
+            showEditUserModal = false;
+            editUser = new RegistrationModel();
+            editingUserId = null;
+            editUserRoleId = 0;
+        }
+    }
+
+    private async Task HandleEditUser()
+    {
+        if (isProcessing || string.IsNullOrEmpty(editingUserId)) return;
+
+        if (editUserRoleId == 0)
+        {
+            alertMessage = "Please select a role.";
+            isSuccess = false;
+            return;
+        }
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            // Update user information
+            var response = await adminPanelService.UpdateUser(
+                editingUserId,
+                editUser.Name ?? string.Empty,
+                editUser.Email ?? string.Empty,
+                string.IsNullOrWhiteSpace(editUser.Password) ? null : editUser.Password
+            );
+            
+            if (!response.Success)
+            {
+                alertMessage = response.Message;
+                isSuccess = false;
+                isProcessing = false;
+                return;
+            }
+
+            // Update user role
+            var currentUserRole = userRoles.FirstOrDefault(ur => ur.UserId == editingUserId);
+            
+            // Get user's AdminInfo Id to assign new role
+            var user = allUsers.FirstOrDefault(u => u.UserId == editingUserId);
+            if (user == null)
+            {
+                alertMessage = "User not found.";
+                isSuccess = false;
+                isProcessing = false;
+                return;
+            }
+
+            // Check if role needs to be updated
+            bool roleNeedsUpdate = currentUserRole == null || currentUserRole.RoleId != editUserRoleId;
+            
+            if (roleNeedsUpdate)
+            {
+                // Remove old role assignment if it exists
+                if (currentUserRole != null)
+                {
+                    var removeResponse = await adminPanelService.RemoveRoleFromUser(currentUserRole.Id);
+                    if (!removeResponse.Success)
+                    {
+                        alertMessage = $"User updated but failed to update role: {removeResponse.Message}";
+                        isSuccess = false;
+                        isProcessing = false;
+                        return;
+                    }
+                }
+
+                // Assign new role
+                var assignResponse = await adminPanelService.AssignRoleToUser(user.Id, editUserRoleId);
+                if (!assignResponse.Success)
+                {
+                    alertMessage = $"User updated but failed to assign new role: {assignResponse.Message}";
+                    isSuccess = false;
+                    isProcessing = false;
+                    return;
+                }
+            }
+
+            alertMessage = "User and role updated successfully.";
+            isSuccess = true;
+
+            if (response.Success)
+            {
+                showEditUserModal = false;
+                editUser = new RegistrationModel();
+                editingUserId = null;
+                editUserRoleId = 0;
+                await LoadData();
+                // Reset to first page if current page is empty after deletion
+                if (currentPage > totalPages && totalPages > 0)
+                {
+                    currentPage = totalPages;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error updating user: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    // Pagination methods
+    private void GoToPage(int page)
+    {
+        if (page >= 1 && page <= totalPages && !isProcessing)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToNextPage()
+    {
+        if (currentPage < totalPages && !isProcessing)
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToPreviousPage()
+    {
+        if (currentPage > 1 && !isProcessing)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToFirstPage()
+    {
+        if (currentPage != 1 && !isProcessing)
+        {
+            currentPage = 1;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToLastPage()
+    {
+        if (currentPage != totalPages && totalPages > 0 && !isProcessing)
+        {
+            currentPage = totalPages;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPageSizeChanged()
+    {
+        // Reset to first page when page size changes
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortByColumn(string column)
+    {
+        if (isProcessing) return;
+
+        if (sortColumn == column)
+        {
+            // Toggle sort direction if clicking the same column
+            sortDirection = sortDirection == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            // Set new sort column and default to ascending
+            sortColumn = column;
+            sortDirection = "asc";
+        }
+
+        // Reset to first page when sorting changes
+        currentPage = 1;
+        StateHasChanged();
     }
 }

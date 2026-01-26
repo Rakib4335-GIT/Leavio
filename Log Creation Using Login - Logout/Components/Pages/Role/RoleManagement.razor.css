@@ -248,3 +248,118 @@
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .role-management-page {
+        padding: 15px;
+    }
+
+    .role-management-card {
+        padding: 20px;
+    }
+
+    .page-title {
+        font-size: 24px;
+        margin-bottom: 20px;
+    }
+
+    .add-role-section h2 {
+        font-size: 18px;
+    }
+
+    .roles-list-section h2 {
+        font-size: 18px;
+    }
+
+    .roles-table {
+        font-size: 14px;
+    }
+
+    .roles-table th,
+    .roles-table td {
+        padding: 8px;
+    }
+
+    .table-container {
+        overflow-x: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .role-management-page {
+        padding: 10px;
+    }
+
+    .role-management-card {
+        padding: 15px;
+    }
+
+    .page-title {
+        font-size: 20px;
+        margin-bottom: 15px;
+    }
+
+    .add-role-section {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+    }
+
+    .add-role-section h2 {
+        font-size: 16px;
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+    }
+
+    .form-control {
+        font-size: 13px;
+        padding: 8px;
+    }
+
+    .btn-add-role {
+        padding: 10px 20px;
+        font-size: 14px;
+        width: 100%;
+    }
+
+    .roles-list-section h2 {
+        font-size: 16px;
+    }
+
+    .roles-table {
+        font-size: 12px;
+        min-width: 500px;
+    }
+
+    .roles-table th,
+    .roles-table td {
+        padding: 6px;
+    }
+
+    .btn-delete {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    .loading-message,
+    .unauthorized-message {
+        padding: 20px;
+        margin: 20px auto;
+    }
+
+    .unauthorized-message h2 {
+        font-size: 20px;
+    }
+
+    .unauthorized-message p {
+        font-size: 14px;
+    }
+
+    .unauthorized-message a {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
+}

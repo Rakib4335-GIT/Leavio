@@ -31,6 +31,7 @@ public partial class RegesterServiceContext : DbContext
 
             entity.ToTable("AdminInfo");
 
+            entity.Property(e => e.UserId).HasMaxLength(100);
             entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.Password).HasMaxLength(255);
@@ -56,16 +57,10 @@ public partial class RegesterServiceContext : DbContext
 
             entity.ToTable("User_Role");
 
-            entity.Property(e => e.UserId).IsRequired();
+            entity.Property(e => e.UserId).HasMaxLength(100).IsRequired();
             entity.Property(e => e.RoleId).IsRequired();
 
-            // Configure foreign key relationships
-            entity.HasOne(d => d.User)
-                .WithMany()
-                .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_UserRole_AdminInfo");
-
+            // Configure foreign key relationship to Role
             entity.HasOne(d => d.Role)
                 .WithMany(r => r.UserRoles)
                 .HasForeignKey(d => d.RoleId)
