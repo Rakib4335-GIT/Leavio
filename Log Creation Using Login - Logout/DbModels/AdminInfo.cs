@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Log_Creation_Using_Login___Logout.Models;
 
 namespace Log_Creation_Using_Login___Logout.DbModels;
 
@@ -14,5 +13,8 @@ public partial class AdminInfo
 
     public string Password { get; set; } = null!;
 
-    public Role Role { get; set; } = Role.User;
+    public int RoleId { get; set; }
+
+    // Navigation property
+    public virtual Role Role { get; set; } = null!;
 }

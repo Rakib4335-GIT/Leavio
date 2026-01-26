@@ -15,6 +15,10 @@
             <a href="/">Home</a>
             <a href="/aboutUs">About Us</a>
             <a href="/contact">Contact</a>
+            @if (isLoggedIn)
+            {
+                <a href="/role-management">Role Management</a>
+            }
         </div>
 
 

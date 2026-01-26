@@ -1,6 +1,7 @@
 ﻿@page "/register"
 @using Log_Creation_Using_Login___Logout.Models
 @using Log_Creation_Using_Login___Logout.PanelService
+@using Log_Creation_Using_Login___Logout.DbModels
 @using Microsoft.AspNetCore.Components
 
 @inject AdminPanelService adminPanelService
@@ -61,14 +62,17 @@
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                     </svg>
-                    <select id="role" @bind="registrationModel.Role" class="role-select" disabled="@isProcessing">
-                        <option value="@Role.User">User</option>
-                        <option value="@Role.Admin">Admin</option>
+                    <select id="role" @bind="registrationModel.RoleId" class="role-select" disabled="@isProcessing">
+                        <option value="0">-- Select Role --</option>
+                        @foreach (var role in availableRoles)
+                        {
+                            <option value="@role.Id">@role.RoleName</option>
+                        }
                     </select>
                 </div>
             </div>
 
-            <button type="submit" class="register-button" disabled="@(isProcessing || isEmailValid == false)">
+            <button type="submit" class="register-button" disabled="@(isProcessing || (isEmailValid == false) || registrationModel.RoleId == 0)">
                 @if (isProcessing)
                 {
                     <text>Processing...</text>
@@ -124,6 +128,21 @@
     private bool isProcessing = false;
     private bool isSuccess = false;
     private bool? isEmailValid = null;
+    private List<DbModels.Role> availableRoles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRoles();
+    }
+
+    private async Task LoadRoles()
+    {
+        availableRoles = await adminPanelService.GetAllRolesAsync();
+        if (availableRoles.Any() && registrationModel.RoleId == 0)
+        {
+            registrationModel.RoleId = availableRoles.First().Id;
+        }
+    }
 
     private void ValidateEmail()
     {

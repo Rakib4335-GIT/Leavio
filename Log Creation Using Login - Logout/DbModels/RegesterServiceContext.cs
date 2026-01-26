@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using Log_Creation_Using_Login___Logout.Models;
 
 namespace Log_Creation_Using_Login___Logout.DbModels;
 
@@ -17,6 +16,7 @@ public partial class RegesterServiceContext : DbContext
     }
 
     public virtual DbSet<AdminInfo> AdminInfos { get; set; }
+    public virtual DbSet<Role> Roles { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -24,6 +24,20 @@ public partial class RegesterServiceContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Role__3214EC07");
+
+            entity.ToTable("Role");
+
+            entity.Property(e => e.RoleName)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.Description)
+                .HasMaxLength(500);
+        });
+
         modelBuilder.Entity<AdminInfo>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__AdminInf__3214EC0780892F8E");
@@ -33,9 +47,14 @@ public partial class RegesterServiceContext : DbContext
             entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.Password).HasMaxLength(255);
-            entity.Property(e => e.Role)
-                .HasConversion<int>()
-                .IsRequired();
+            entity.Property(e => e.RoleId).IsRequired();
+
+            // Configure foreign key relationship
+            entity.HasOne(d => d.Role)
+                .WithMany(p => p.AdminInfos)
+                .HasForeignKey(d => d.RoleId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_AdminInfo_Role");
         });
 
         OnModelCreatingPartial(modelBuilder);

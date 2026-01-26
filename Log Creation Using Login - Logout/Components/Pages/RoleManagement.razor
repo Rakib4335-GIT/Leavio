@@ -1,0 +1,203 @@
+@page "/role-management"
+@using Log_Creation_Using_Login___Logout.DbModels
+@using Log_Creation_Using_Login___Logout.PanelService
+@using Log_Creation_Using_Login___Logout.Models
+@using Microsoft.EntityFrameworkCore
+
+@inject AdminPanelService adminPanelService
+@inject IDbContextFactory<RegesterServiceContext> contextFactory
+
+<PageTitle>Role Management</PageTitle>
+
+<div class="role-management-page">
+    <div class="role-management-card">
+        <h1 class="page-title">Role Management</h1>
+
+        <!-- Add New Role Form -->
+        <div class="add-role-section">
+            <h2>Add New Role</h2>
+            <form @onsubmit="HandleAddRole" @onsubmit:preventDefault="true" class="role-form">
+                <div class="form-group">
+                    <label for="roleName">Role Name</label>
+                    <input type="text" id="roleName" @bind="newRole.RoleName" placeholder="Enter role name (e.g., Admin, User)" required disabled="@isProcessing" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="roleDescription">Description (Optional)</label>
+                    <textarea id="roleDescription" @bind="newRole.Description" placeholder="Enter role description" disabled="@isProcessing" class="form-control" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn-add-role" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <text>Adding...</text>
+                    }
+                    else
+                    {
+                        <text>Add Role</text>
+                    }
+                </button>
+            </form>
+        </div>
+
+        @if (!string.IsNullOrEmpty(alertMessage))
+        {
+            <div class="alert-message @(isSuccess ? "alert-success" : "alert-error")">
+                @alertMessage
+            </div>
+        }
+
+        <!-- Existing Roles List -->
+        <div class="roles-list-section">
+            <h2>Existing Roles</h2>
+            @if (roles.Any())
+            {
+                <table class="roles-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Role Name</th>
+                            <th>Description</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var role in roles)
+                        {
+                            <tr>
+                                <td>@role.Id</td>
+                                <td>@role.RoleName</td>
+                                <td>@(role.Description ?? "N/A")</td>
+                                <td>
+                                    <button @onclick="() => DeleteRole(role.Id)" class="btn-delete" disabled="@isProcessing">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="no-roles">No roles found. Please add a role above.</p>
+            }
+        </div>
+
+        <div class="back-link">
+            <a href="/">Back to Home</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<DbModels.Role> roles = new();
+    private DbModels.Role newRole = new();
+    private string alertMessage = string.Empty;
+    private bool isProcessing = false;
+    private bool isSuccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRoles();
+    }
+
+    private async Task LoadRoles()
+    {
+        try
+        {
+            roles = await adminPanelService.GetAllRolesAsync();
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error loading roles: {ex.Message}";
+            isSuccess = false;
+        }
+    }
+
+    private async Task HandleAddRole()
+    {
+        if (isProcessing) return;
+
+        if (string.IsNullOrWhiteSpace(newRole.RoleName))
+        {
+            alertMessage = "Role name is required.";
+            isSuccess = false;
+            return;
+        }
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            using var context = await contextFactory.CreateDbContextAsync();
+
+            // Check if role name already exists
+            var existingRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == newRole.RoleName.ToLower());
+            if (existingRole != null)
+            {
+                alertMessage = "A role with this name already exists.";
+                isSuccess = false;
+                return;
+            }
+
+            await context.Roles.AddAsync(newRole);
+            await context.SaveChangesAsync();
+
+            alertMessage = "Role added successfully!";
+            isSuccess = true;
+            newRole = new DbModels.Role();
+            await LoadRoles();
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error adding role: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task DeleteRole(int roleId)
+    {
+        if (isProcessing) return;
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            using var context = await contextFactory.CreateDbContextAsync();
+
+            // Check if role is being used by any users
+            var usersWithRole = await context.AdminInfos.AnyAsync(a => a.RoleId == roleId);
+            if (usersWithRole)
+            {
+                alertMessage = "Cannot delete role. It is assigned to one or more users.";
+                isSuccess = false;
+                return;
+            }
+
+            var role = await context.Roles.FindAsync(roleId);
+            if (role != null)
+            {
+                context.Roles.Remove(role);
+                await context.SaveChangesAsync();
+
+                alertMessage = "Role deleted successfully!";
+                isSuccess = true;
+                await LoadRoles();
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error deleting role: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

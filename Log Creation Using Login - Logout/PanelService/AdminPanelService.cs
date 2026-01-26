@@ -56,13 +56,24 @@ namespace Log_Creation_Using_Login___Logout.PanelService
                         Message = "Admin with this email already exists."
                     };
                 }
+
+                // Validate RoleId exists
+                var roleExists = await context.Roles.AnyAsync(x => x.Id == registrationModel.RoleId);
+                if (!roleExists)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Invalid role selected."
+                    };
+                }
                 
                 var dbAdminInfo = new AdminInfo
                 {
                     Name = registrationModel.Name,
                     Email = registrationModel.Email,
                     Password = registrationModel.Password,
-                    Role = registrationModel.Role
+                    RoleId = registrationModel.RoleId
                 };
                 
                 await context.AdminInfos.AddAsync(dbAdminInfo);
@@ -118,7 +129,10 @@ namespace Log_Creation_Using_Login___Logout.PanelService
                     };
                 }
 
-                var user = await context.AdminInfos.FirstOrDefaultAsync(x => x.Email == loginModel.EmailId);
+                var user = await context.AdminInfos
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(x => x.Email == loginModel.EmailId);
+                    
                 if (user == null)
                 {
                     return new ResponseModel
@@ -140,7 +154,7 @@ namespace Log_Creation_Using_Login___Logout.PanelService
                 return new ResponseModel
                 {
                     Success = true,
-                    Message = $"Login Successful! User ID: {user.Id} | Name: {user.Name} | Email: {user.Email} | Role: {user.Role}"
+                    Message = $"Login Successful! User ID: {user.Id} | Name: {user.Name} | Email: {user.Email} | Role: {user.Role.RoleName}"
                 };
             }
             catch (Exception ex)
@@ -150,6 +164,19 @@ namespace Log_Creation_Using_Login___Logout.PanelService
                     Success = false,
                     Message = $"An error occurred: {ex.Message}"
                 };
+            }
+        }
+
+        public async Task<List<DbModels.Role>> GetAllRolesAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                return await context.Roles.OrderBy(r => r.RoleName).ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<Role>();
             }
         }
     }
