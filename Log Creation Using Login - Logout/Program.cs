@@ -1,6 +1,6 @@
-using Log_Creation_Using_Login___Logout.Components;
-using Log_Creation_Using_Login___Logout.DbModels;
-using Log_Creation_Using_Login___Logout.PanelService;
+using OfficeFlow.Components;
+using OfficeFlow.DbModels;
+using OfficeFlow.PanelService;
 using Microsoft.EntityFrameworkCore;
 using Blazored.SessionStorage;
 

@@ -1,8 +1,8 @@
-﻿using Log_Creation_Using_Login___Logout.DbModels;
-using Log_Creation_Using_Login___Logout.Models;
+﻿using OfficeFlow.DbModels;
+using OfficeFlow.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace Log_Creation_Using_Login___Logout.PanelService
+namespace OfficeFlow.PanelService
 {
     public class AdminPanelService
     {

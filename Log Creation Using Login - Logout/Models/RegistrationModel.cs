@@ -1,4 +1,4 @@
-﻿namespace Log_Creation_Using_Login___Logout.Models
+﻿namespace OfficeFlow.Models
 {
     public class RegistrationModel
     {

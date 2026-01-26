@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
-namespace Log_Creation_Using_Login___Logout.DbModels;
+namespace OfficeFlow.DbModels;
 
 public partial class RegesterServiceContext : DbContext
 {

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Log_Creation_Using_Login___Logout.DbModels;
+namespace OfficeFlow.DbModels;
 
 public partial class Role
 {
