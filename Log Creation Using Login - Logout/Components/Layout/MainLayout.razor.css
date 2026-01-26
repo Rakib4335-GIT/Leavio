@@ -91,7 +91,21 @@
 
 .header-button {
     display: flex;
-    gap: 12px;
+    align-items: center;
+    gap: 15px;
+}
+
+.welcome-message {
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
 }
 
 .header-button .btn {
@@ -121,16 +135,29 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.header-button .btn-danger {
+.header-button .btn-danger,
+.header-button .logout-btn {
     background: rgba(255, 255, 255, 0.95);
     color: #764ba2;
-    border: 2px solid transparent;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    min-width: 100px;
 }
 
-.header-button .btn-danger:hover {
+.header-button .btn-danger:hover,
+.header-button .logout-btn:hover {
     background: white;
+    color: #667eea;
+    border-color: rgba(255, 255, 255, 0.6);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.header-button .btn-danger:active,
+.header-button .logout-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .header-button .btn:active {
@@ -187,11 +214,22 @@ main {
     .header-button {
         width: 100%;
         justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .welcome-message {
+        width: 100%;
+        text-align: center;
+        font-size: 13px;
+        padding: 6px 12px;
+        margin-bottom: 8px;
     }
 
     .header-button .btn {
         flex: 1;
         max-width: 150px;
+        font-size: 12px;
+        padding: 8px 16px;
     }
 
     .content {

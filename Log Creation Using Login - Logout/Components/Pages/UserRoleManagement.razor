@@ -13,7 +13,14 @@
 
 <PageTitle>User Role Management</PageTitle>
 
-@if (!isAuthorized)
+@if (isCheckingAuth)
+{
+    <div class="loading-message">
+        <div class="spinner"></div>
+        <p>Checking authorization...</p>
+    </div>
+}
+else if (!isAuthorized)
 {
     <div class="unauthorized-message">
         <h2>Access Denied</h2>
@@ -132,13 +139,19 @@ else
     private bool isProcessing = false;
     private bool isSuccess = false;
     private bool isAuthorized = false;
+    private bool isCheckingAuth = true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await CheckAuthorization();
-        if (isAuthorized)
+        if (firstRender)
         {
-            await LoadData();
+            await CheckAuthorization();
+            if (isAuthorized)
+            {
+                await LoadData();
+            }
+            isCheckingAuth = false;
+            StateHasChanged();
         }
     }
 
@@ -148,6 +161,7 @@ else
         if (string.IsNullOrEmpty(storedUserRole))
         {
             // Not logged in, redirect to login
+            isCheckingAuth = false;
             navigation.NavigateTo("/login");
             return;
         }

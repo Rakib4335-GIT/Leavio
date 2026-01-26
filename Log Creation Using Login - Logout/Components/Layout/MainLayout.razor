@@ -29,8 +29,7 @@
             @if (isLoggedIn)
             {
                 <span class="welcome-message">Welcome, @userName! (@userRole)</span>
-                <button @onclick="Logout" class="btn-danger btn-danger">Logout</button>
-
+                <button @onclick="Logout" class="btn btn-danger logout-btn">Logout</button>
             }
             else
             {

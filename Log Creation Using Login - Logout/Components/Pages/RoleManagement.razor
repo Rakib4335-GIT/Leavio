@@ -13,7 +13,14 @@
 
 <PageTitle>Role Management</PageTitle>
 
-@if (!isAuthorized)
+@if (isCheckingAuth)
+{
+    <div class="loading-message">
+        <div class="spinner"></div>
+        <p>Checking authorization...</p>
+    </div>
+}
+else if (!isAuthorized)
 {
     <div class="unauthorized-message">
         <h2>Access Denied</h2>
@@ -27,7 +34,6 @@ else
     <div class="role-management-card">
         <h1 class="page-title">Role Management</h1>
 
-        <!-- Add New Role Form -->
         <div class="add-role-section">
             <h2>Add New Role</h2>
             <form @onsubmit="HandleAddRole" @onsubmit:preventDefault="true" class="role-form">
@@ -59,7 +65,6 @@ else
             </div>
         }
 
-        <!-- Existing Roles List -->
         <div class="roles-list-section">
             <h2>Existing Roles</h2>
             @if (roles.Any())
@@ -108,13 +113,19 @@ else
     private bool isProcessing = false;
     private bool isSuccess = false;
     private bool isAuthorized = false;
+    private bool isCheckingAuth = true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await CheckAuthorization();
-        if (isAuthorized)
+        if (firstRender)
         {
-            await LoadRoles();
+            await CheckAuthorization();
+            if (isAuthorized)
+            {
+                await LoadRoles();
+            }
+            isCheckingAuth = false;
+            StateHasChanged();
         }
     }
 
@@ -124,6 +135,7 @@ else
         if (string.IsNullOrEmpty(storedUserRole))
         {
             // Not logged in, redirect to login
+            isCheckingAuth = false;
             navigation.NavigateTo("/login");
             return;
         }
@@ -208,7 +220,6 @@ else
         {
             using var context = await contextFactory.CreateDbContextAsync();
 
-            // Check if role is being used by any users (check User_Role table)
             var usersWithRole = await context.UserRoles.AnyAsync(ur => ur.RoleId == roleId);
             if (usersWithRole)
             {
