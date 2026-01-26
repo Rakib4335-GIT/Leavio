@@ -109,19 +109,21 @@
 
             if (response.Success)
             {
-                // Parse the message: "Login Successful! User ID: {id} | Name: {name} | Email: {email}"
+                // Parse the message: "Login Successful! User ID: {id} | Name: {name} | Email: {email} | Role: {role}"
                 var parts = response.Message.Split("|");
                 
-                if (parts.Length >= 3)
+                if (parts.Length >= 4)
                 {
                     // Extract values after colons
                     var idPart = parts[0].Split(':').LastOrDefault()?.Trim() ?? "";
                     var namePart = parts[1].Split(':').LastOrDefault()?.Trim() ?? "";
                     var emailPart = parts[2].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var rolePart = parts[3].Split(':').LastOrDefault()?.Trim() ?? "";
 
                     await sessionStorage.SetItemAsync("adminId", idPart);
                     await sessionStorage.SetItemAsync("adminName", namePart);
                     await sessionStorage.SetItemAsync("adminEmail", emailPart);
+                    await sessionStorage.SetItemAsync("adminRole", rolePart);
                 }
 
                 navigation.NavigateTo("/", forceLoad: true);

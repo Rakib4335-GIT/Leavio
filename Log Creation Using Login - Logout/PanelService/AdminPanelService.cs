@@ -61,7 +61,8 @@ namespace Log_Creation_Using_Login___Logout.PanelService
                 {
                     Name = registrationModel.Name,
                     Email = registrationModel.Email,
-                    Password = registrationModel.Password
+                    Password = registrationModel.Password,
+                    Role = registrationModel.Role
                 };
                 
                 await context.AdminInfos.AddAsync(dbAdminInfo);
@@ -139,7 +140,7 @@ namespace Log_Creation_Using_Login___Logout.PanelService
                 return new ResponseModel
                 {
                     Success = true,
-                    Message = $"Login Successful! User ID: {user.Id} | Name: {user.Name} | Email: {user.Email}"
+                    Message = $"Login Successful! User ID: {user.Id} | Name: {user.Name} | Email: {user.Email} | Role: {user.Role}"
                 };
             }
             catch (Exception ex)

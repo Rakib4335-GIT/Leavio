@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using Log_Creation_Using_Login___Logout.Models;
 
 namespace Log_Creation_Using_Login___Logout.DbModels;
 
@@ -32,6 +33,9 @@ public partial class RegesterServiceContext : DbContext
             entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.Password).HasMaxLength(255);
+            entity.Property(e => e.Role)
+                .HasConversion<int>()
+                .IsRequired();
         });
 
         OnModelCreatingPartial(modelBuilder);

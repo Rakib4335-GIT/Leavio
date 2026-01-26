@@ -23,7 +23,7 @@
         <div class="header-button">
             @if (isLoggedIn)
             {
-                <span class="welcome-message">Welcome, @userName!</span>
+                <span class="welcome-message">Welcome, @userName! (@userRole)</span>
                 <button @onclick="Logout" class="btn-danger btn-danger">Logout</button>
 
             }
@@ -54,16 +54,19 @@
 @code {
     private bool isLoggedIn = false;
     private string userName = string.Empty;
+    private string userRole = string.Empty;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             var storedUserName = await sessionStorage.GetItemAsync<string>("adminName");
+            var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
             if (!string.IsNullOrEmpty(storedUserName))
             {
                 isLoggedIn = true;
                 userName = storedUserName;
+                userRole = storedUserRole ?? "User";
                 StateHasChanged();
             }
         }
@@ -74,6 +77,7 @@
         await sessionStorage.ClearAsync();
         isLoggedIn = false;
         userName = string.Empty;
+        userRole = string.Empty;
         navigation.NavigateTo("/login");
     }
 

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Log_Creation_Using_Login___Logout.Models;
 
 namespace Log_Creation_Using_Login___Logout.DbModels;
 
@@ -12,4 +13,6 @@ public partial class AdminInfo
     public string Email { get; set; } = null!;
 
     public string Password { get; set; } = null!;
+
+    public Role Role { get; set; } = Role.User;
 }

@@ -93,6 +93,30 @@
     border-bottom-color: #dc3545;
 }
 
+.role-select {
+    width: 100%;
+    padding: 12px 12px 12px 40px;
+    border: none;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.3s ease;
+    background: transparent;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.role-select:focus {
+    border-bottom-color: #667eea;
+}
+
+.role-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .validation-error {
     color: #dc3545;
     font-size: 12px;
