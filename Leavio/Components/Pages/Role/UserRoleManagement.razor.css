@@ -80,6 +80,41 @@
     cursor: not-allowed;
 }
 
+.password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-wrapper .form-control {
+    padding-right: 40px;
+    width: 100%;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    transition: color 0.3s ease;
+    z-index: 2;
+}
+
+.password-toggle:hover:not(:disabled) {
+    color: #667eea;
+}
+
+.password-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .btn-assign-role {
     padding: 12px 24px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
