@@ -217,7 +217,7 @@ namespace Leavio.PanelService
                     return new ResponseModel
                     {
                         Success = false,
-                        Message = "Email is required."
+                        Message = "User Name or Email is required."
                     };
                 }
 
@@ -230,16 +230,31 @@ namespace Leavio.PanelService
                     };
                 }
 
+                // Try to find user by Email or UserId (case-insensitive)
+                var loginInput = loginModel.EmailId?.Trim();
+                if (string.IsNullOrEmpty(loginInput))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "User Name or Email is required."
+                    };
+                }
+                
+                // Use ToLower() for case-insensitive comparison (works with SQL Server and most databases)
+                var loginInputLower = loginInput.ToLower();
                 var user = await context.AdminInfos
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Email == loginModel.EmailId);
+                    .FirstOrDefaultAsync(x => 
+                        (!string.IsNullOrEmpty(x.Email) && x.Email.ToLower() == loginInputLower) ||
+                        (!string.IsNullOrEmpty(x.UserId) && x.UserId.ToLower() == loginInputLower));
                     
                 if (user == null)
                 {
                     return new ResponseModel
                     {
                         Success = false,
-                        Message = "Email Not Registered"
+                        Message = "User Name or Email Not Registered"
                     };
                 }
 
