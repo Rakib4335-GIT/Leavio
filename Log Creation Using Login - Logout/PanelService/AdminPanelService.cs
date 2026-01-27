@@ -1,8 +1,8 @@
-﻿using OfficeFlow.DbModels;
-using OfficeFlow.Models;
+﻿using Leavio.DbModels;
+using Leavio.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace OfficeFlow.PanelService
+namespace Leavio.PanelService
 {
     public class AdminPanelService
     {

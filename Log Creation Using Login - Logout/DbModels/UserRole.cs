@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace OfficeFlow.DbModels;
+namespace Leavio.DbModels;
 
 public partial class UserRole
 {

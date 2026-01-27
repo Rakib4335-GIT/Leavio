@@ -1,4 +1,4 @@
-﻿namespace OfficeFlow.Models
+﻿namespace Leavio.Models
 {
     public class RegistrationModel
     {

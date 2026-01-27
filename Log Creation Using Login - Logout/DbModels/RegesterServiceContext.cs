@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
-namespace OfficeFlow.DbModels;
+namespace Leavio.DbModels;
 
 public partial class RegesterServiceContext : DbContext
 {

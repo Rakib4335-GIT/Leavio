@@ -1,6 +1,6 @@
-using OfficeFlow.Components;
-using OfficeFlow.DbModels;
-using OfficeFlow.PanelService;
+using Leavio.Components;
+using Leavio.DbModels;
+using Leavio.PanelService;
 using Microsoft.EntityFrameworkCore;
 using Blazored.SessionStorage;
 
