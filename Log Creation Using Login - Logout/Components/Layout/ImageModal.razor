@@ -1,0 +1,37 @@
+@if (IsVisible)
+{
+    <div class="image-modal-overlay" @onclick="CloseModal" @onkeydown="HandleKeyDown" @onkeydown:preventDefault="false" tabindex="0">
+        <div class="image-modal-content" @onclick:stopPropagation="true">
+            <button class="image-modal-close" @onclick="CloseModal" aria-label="Close">×</button>
+            <img src="@ImageSrc" alt="@ImageAlt" class="image-modal-image" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public string ImageSrc { get; set; } = string.Empty;
+
+    [Parameter]
+    public string ImageAlt { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private void CloseModal()
+    {
+        IsVisible = false;
+        OnClose.InvokeAsync();
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CloseModal();
+        }
+    }
+}

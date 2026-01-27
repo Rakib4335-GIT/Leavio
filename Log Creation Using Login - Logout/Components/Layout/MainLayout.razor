@@ -7,7 +7,7 @@
 
     <header class="header">
         <div>
-            <img src="Images/logo.jpg" alt="Logo" class="logo">
+            <img src="Images/Favicon1.png" alt="Logo" class="logo" @onclick="ShowImageModal" style="cursor: pointer;">
             <span class="header-title">Leavio</span>
         </div>
 
@@ -48,6 +48,11 @@
     </main>
 </div>
 
+<ImageModal IsVisible="@showImageModal" 
+           ImageSrc="Images/Favicon1.png" 
+           ImageAlt="Leavio Logo" 
+           OnClose="@(() => showImageModal = false)" />
+
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
@@ -60,6 +65,12 @@
     private string userName = string.Empty;
     private string userRole = string.Empty;
     private bool isAdmin = false;
+    private bool showImageModal = false;
+
+    private void ShowImageModal()
+    {
+        showImageModal = true;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
