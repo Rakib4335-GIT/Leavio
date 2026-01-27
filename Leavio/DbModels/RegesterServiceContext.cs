@@ -18,6 +18,7 @@ public partial class RegesterServiceContext : DbContext
     public virtual DbSet<AdminInfo> AdminInfos { get; set; }
     public virtual DbSet<Role> Roles { get; set; }
     public virtual DbSet<UserRole> UserRoles { get; set; }
+    public virtual DbSet<SystemSettings> SystemSettings { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -71,6 +72,29 @@ public partial class RegesterServiceContext : DbContext
             entity.HasIndex(e => new { e.UserId, e.RoleId })
                 .IsUnique()
                 .HasDatabaseName("IX_UserRole_UserId_RoleId");
+        });
+
+        modelBuilder.Entity<SystemSettings>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__SystemSettings__3214EC07");
+
+            entity.ToTable("SystemSettings");
+
+            entity.Property(e => e.SettingKey)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.SettingValue)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(e => e.Description)
+                .HasMaxLength(500);
+
+            // Create unique index on SettingKey
+            entity.HasIndex(e => e.SettingKey)
+                .IsUnique()
+                .HasDatabaseName("IX_SystemSettings_SettingKey");
         });
 
         OnModelCreatingPartial(modelBuilder);

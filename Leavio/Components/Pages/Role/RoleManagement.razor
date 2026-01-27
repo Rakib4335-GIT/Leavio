@@ -65,6 +65,24 @@ else
             </div>
         }
 
+        <!-- System Settings Section -->
+        <div class="system-settings-section">
+            <h2>System Settings</h2>
+            <div class="settings-item">
+                <div class="settings-label-group">
+                    <label for="registrationEnabled">User Registration</label>
+                    <span class="settings-description">Enable or disable user registration page</span>
+                </div>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="registrationEnabled" @bind="registrationEnabled" @bind:after="OnRegistrationToggleChanged" disabled="@isProcessing" />
+                    <label for="registrationEnabled" class="toggle-label">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-status">@(registrationEnabled ? "Enabled" : "Disabled")</span>
+                </div>
+            </div>
+        </div>
+
         <div class="roles-list-section">
             <h2>Existing Roles</h2>
             @if (roles.Any())
@@ -114,6 +132,7 @@ else
     private bool isSuccess = false;
     private bool isAuthorized = false;
     private bool isCheckingAuth = true;
+    private bool registrationEnabled = true;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -123,9 +142,44 @@ else
             if (isAuthorized)
             {
                 await LoadRoles();
+                await LoadRegistrationSetting();
             }
             isCheckingAuth = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task LoadRegistrationSetting()
+    {
+        try
+        {
+            registrationEnabled = await adminPanelService.IsRegistrationEnabledAsync();
+        }
+        catch (Exception)
+        {
+            registrationEnabled = true; // Default to enabled on error
+        }
+    }
+
+    private async Task OnRegistrationToggleChanged()
+    {
+        if (isProcessing) return;
+
+        isProcessing = true;
+        try
+        {
+            var response = await adminPanelService.SetRegistrationEnabledAsync(registrationEnabled);
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error updating setting: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
         }
     }
 

@@ -523,5 +523,73 @@ namespace Leavio.PanelService
                 };
             }
         }
+
+        public async Task<bool> IsRegistrationEnabledAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var setting = await context.SystemSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.SettingKey == "RegistrationEnabled");
+                
+                if (setting == null)
+                {
+                    // Default to enabled if setting doesn't exist
+                    return true;
+                }
+                
+                return bool.TryParse(setting.SettingValue, out var result) && result;
+            }
+            catch (Exception)
+            {
+                // Default to enabled on error
+                return true;
+            }
+        }
+
+        public async Task<ResponseModel> SetRegistrationEnabledAsync(bool enabled)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                
+                var setting = await context.SystemSettings
+                    .FirstOrDefaultAsync(s => s.SettingKey == "RegistrationEnabled");
+                
+                if (setting == null)
+                {
+                    // Create new setting
+                    setting = new SystemSettings
+                    {
+                        SettingKey = "RegistrationEnabled",
+                        SettingValue = enabled.ToString(),
+                        Description = "Controls whether user registration is enabled or disabled"
+                    };
+                    await context.SystemSettings.AddAsync(setting);
+                }
+                else
+                {
+                    // Update existing setting
+                    setting.SettingValue = enabled.ToString();
+                }
+                
+                await context.SaveChangesAsync();
+                
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = $"Registration has been {(enabled ? "enabled" : "disabled")}."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
     }
 }

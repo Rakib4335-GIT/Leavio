@@ -3,7 +3,7 @@
 @inherits LayoutComponentBase
 @inject NavigationManager navigation
 
-<div class="page">
+<div class="page" @onclick="HandlePageClick">
 
     <header class="header">
         <div>
@@ -17,8 +17,19 @@
             <a href="/contact">Contact</a>
             @if (isLoggedIn && isAdmin)
             {
-                <a href="/role-management">Role Management</a>
-                <a href="/user-role-management">User Roles</a>
+                <div class="menu-dropdown" @onclick:stopPropagation="true">
+                    <button class="menu-trigger" @onclick="ToggleMenu">
+                        <span>Admin Menu</span>
+                        <span class="menu-arrow @(showMenu ? "open" : "")">▼</span>
+                    </button>
+                    @if (showMenu)
+                    {
+                        <div class="menu-dropdown-content">
+                            <a href="/role-management" class="menu-button" @onclick="CloseMenu">ROLE MANAGEMENT</a>
+                            <a href="/user-role-management" class="menu-button" @onclick="CloseMenu">USER ROLES</a>
+                        </div>
+                    }
+                </div>
             }
         </div>
 
@@ -66,6 +77,7 @@
     private string userRole = string.Empty;
     private bool isAdmin = false;
     private bool showImageModal = false;
+    private bool showMenu = false;
 
     private void ShowImageModal()
     {
@@ -106,5 +118,24 @@
     private void NavigateToRegister()
     {
         navigation.NavigateTo("/register");
+    }
+
+    private void ToggleMenu()
+    {
+        showMenu = !showMenu;
+    }
+
+    private void CloseMenu()
+    {
+        showMenu = false;
+    }
+
+    private void HandlePageClick()
+    {
+        if (showMenu)
+        {
+            showMenu = false;
+            StateHasChanged();
+        }
     }
 }

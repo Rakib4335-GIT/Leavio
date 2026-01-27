@@ -11,6 +11,28 @@
     <div class="registration-card">
         <h1 class="registration-title">Registration</h1>
         
+        @if (isCheckingRegistration)
+        {
+            <div class="registration-loading">
+                <div class="loading-spinner"></div>
+                <p>Checking registration status...</p>
+            </div>
+        }
+        else if (!isRegistrationEnabled)
+        {
+            <div class="registration-disabled">
+                <div class="disabled-icon">🚫</div>
+                <h2>Registration is Currently Disabled</h2>
+                <p>User registration has been temporarily disabled by the administrator.</p>
+                <p>Please contact your system administrator if you need to create an account.</p>
+                <div class="disabled-actions">
+                    <a href="/login" class="btn-login-link">Go to Login</a>
+                    <a href="/" class="btn-home-link">Return to Home</a>
+                </div>
+            </div>
+        }
+        else
+        {
         <form @onsubmit="HandleRegistration" @onsubmit:preventDefault="true" class="registration-form" autocomplete="off">
             @* First Row: User ID and Name *@
             <div class="form-row">
@@ -182,6 +204,7 @@
         <div class="login-link">
             <p>Already Have An Account? <a href="/login">Login</a></p>
         </div>
+        }
     </div>
 </div>
 
@@ -202,12 +225,31 @@
     private List<string> captchaDots = new();
     private string captchaBackgroundStyle = "";
     private Microsoft.AspNetCore.Components.ElementReference? captchaContainer;
+    private bool isRegistrationEnabled = true;
+    private bool isCheckingRegistration = true;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         GenerateCaptcha();
         // Roles are not needed since role field is hidden - this improves page load time
         availableRoles = new List<DbModels.Role>();
+        await CheckRegistrationStatus();
+    }
+
+    private async Task CheckRegistrationStatus()
+    {
+        try
+        {
+            isRegistrationEnabled = await adminPanelService.IsRegistrationEnabledAsync();
+        }
+        catch (Exception)
+        {
+            isRegistrationEnabled = true; // Default to enabled on error
+        }
+        finally
+        {
+            isCheckingRegistration = false;
+        }
     }
 
     private void ValidateEmail()
@@ -226,6 +268,14 @@
     private async Task HandleRegistration()
     {
         if (isProcessing) return;
+
+        // Safety check: Ensure registration is enabled
+        if (!isRegistrationEnabled)
+        {
+            alertMessage = "Registration is currently disabled.";
+            isSuccess = false;
+            return;
+        }
 
         // Validate CAPTCHA first
         if (!ValidateCaptcha())

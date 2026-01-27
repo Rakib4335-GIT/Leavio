@@ -180,6 +180,115 @@
     text-decoration: underline;
 }
 
+/* System Settings Section */
+.system-settings-section {
+    margin-bottom: 40px;
+    padding: 25px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+}
+
+.system-settings-section h2 {
+    font-size: 20px;
+    margin-bottom: 20px;
+    color: #555;
+}
+
+.settings-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.settings-label-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.settings-label-group label {
+    font-weight: 600;
+    color: #333;
+    font-size: 16px;
+}
+
+.settings-description {
+    font-size: 13px;
+    color: #666;
+}
+
+.toggle-switch {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.toggle-switch input[type="checkbox"] {
+    display: none;
+}
+
+.toggle-label {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 30px;
+    cursor: pointer;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    border-radius: 30px;
+    transition: 0.3s;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-label .toggle-slider {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-label .toggle-slider:before {
+    transform: translateX(30px);
+}
+
+.toggle-switch input[type="checkbox"]:disabled + .toggle-label {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.toggle-status {
+    font-weight: 600;
+    color: #333;
+    min-width: 80px;
+    text-align: right;
+}
+
+.toggle-switch input[type="checkbox"]:checked ~ .toggle-status {
+    color: #667eea;
+}
+
 .loading-message {
     padding: 40px;
     text-align: center;
