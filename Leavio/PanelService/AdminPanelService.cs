@@ -276,10 +276,13 @@ namespace Leavio.PanelService
                 // Get role name from User_Role table
                 var roleName = userRole?.Role.RoleName ?? "User";
 
+                // Track login time (only first login of the day)
+                await TrackLoginAsync(user.Id);
+
                 return new ResponseModel
                 {
                     Success = true,
-                    Message = $"Login Successful! User ID: {user.Id} | Name: {user.Name} | Email: {user.Email} | Role: {roleName}"
+                    Message = $"Login Successful! User ID: {user.Id} | Name: {user.Name} | Email: {user.Email} | Role: {roleName} | EmployeeId: {user.Id}"
                 };
             }
             catch (Exception ex)
@@ -289,6 +292,115 @@ namespace Leavio.PanelService
                     Success = false,
                     Message = $"An error occurred: {ex.Message}"
                 };
+            }
+        }
+
+        public async Task TrackLoginAsync(int employeeId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                
+                if (employeeId <= 0)
+                {
+                    return;
+                }
+
+                var today = DateTime.Now.Date;
+                var currentTime = DateTime.Now;
+
+                // Check if there's already a record for today
+                var existingRecord = await context.DailyLoginTrackings
+                    .FirstOrDefaultAsync(x => x.EmployeeId == employeeId && x.TrackingDate == today);
+
+                if (existingRecord == null)
+                {
+                    // First login of the day - create new record
+                    var newRecord = new DailyLoginTracking
+                    {
+                        EmployeeId = employeeId,
+                        FirstLoginTime = currentTime,
+                        TrackingDate = today,
+                        LastLogoutTime = null
+                    };
+                    await context.DailyLoginTrackings.AddAsync(newRecord);
+                    await context.SaveChangesAsync();
+                }
+                // If record exists, we don't update FirstLoginTime (it should remain the first login time)
+            }
+            catch (Exception)
+            {
+                // Silently fail - don't break login if tracking fails
+            }
+        }
+
+        public async Task TrackLogoutAsync(int employeeId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                
+                if (employeeId <= 0)
+                {
+                    return;
+                }
+
+                var today = DateTime.Now.Date;
+                var currentTime = DateTime.Now;
+
+                // Find today's record
+                var existingRecord = await context.DailyLoginTrackings
+                    .FirstOrDefaultAsync(x => x.EmployeeId == employeeId && x.TrackingDate == today);
+
+                if (existingRecord != null)
+                {
+                    // Update last logout time
+                    existingRecord.LastLogoutTime = currentTime;
+                    await context.SaveChangesAsync();
+                }
+                // If no record exists, we don't create one on logout (logout without login doesn't make sense)
+            }
+            catch (Exception)
+            {
+                // Silently fail - don't break logout if tracking fails
+            }
+        }
+
+        public async Task<List<DailyLoginTracking>> GetDailyLoginTrackingAsync(int? employeeId = null, DateTime? startDate = null, DateTime? endDate = null)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                
+                var query = context.DailyLoginTrackings
+                    .Include(x => x.Employee)
+                    .AsQueryable();
+
+                // Filter by EmployeeId if provided
+                if (employeeId.HasValue && employeeId.Value > 0)
+                {
+                    query = query.Where(x => x.EmployeeId == employeeId.Value);
+                }
+
+                // Filter by date range if provided
+                if (startDate.HasValue)
+                {
+                    query = query.Where(x => x.TrackingDate >= startDate.Value.Date);
+                }
+
+                if (endDate.HasValue)
+                {
+                    query = query.Where(x => x.TrackingDate <= endDate.Value.Date);
+                }
+
+                return await query
+                    .OrderByDescending(x => x.TrackingDate)
+                    .ThenByDescending(x => x.FirstLoginTime)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<DailyLoginTracking>();
             }
         }
 

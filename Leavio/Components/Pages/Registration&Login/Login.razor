@@ -291,9 +291,25 @@
                 // Parse the message: "Login Successful! User ID: {id} | Name: {name} | Email: {email} | Role: {role}"
                 var parts = response.Message.Split("|");
                 
-                if (parts.Length >= 4)
+                if (parts.Length >= 5)
                 {
                     // Extract values after colons
+                    var idPart = parts[0].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var namePart = parts[1].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var emailPart = parts[2].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var rolePart = parts[3].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var employeeIdPart = parts[4].Split(':').LastOrDefault()?.Trim() ?? "";
+
+                    await sessionStorage.SetItemAsync("adminId", idPart);
+                    await sessionStorage.SetItemAsync("adminName", namePart);
+                    await sessionStorage.SetItemAsync("adminEmail", emailPart);
+                    await sessionStorage.SetItemAsync("adminRole", rolePart);
+                    // EmployeeId is now the same as adminId (both are AdminInfo.Id)
+                    await sessionStorage.SetItemAsync("employeeId", idPart);
+                }
+                else if (parts.Length >= 4)
+                {
+                    // Fallback for old message format (should not happen with updated Login method)
                     var idPart = parts[0].Split(':').LastOrDefault()?.Trim() ?? "";
                     var namePart = parts[1].Split(':').LastOrDefault()?.Trim() ?? "";
                     var emailPart = parts[2].Split(':').LastOrDefault()?.Trim() ?? "";
@@ -303,6 +319,8 @@
                     await sessionStorage.SetItemAsync("adminName", namePart);
                     await sessionStorage.SetItemAsync("adminEmail", emailPart);
                     await sessionStorage.SetItemAsync("adminRole", rolePart);
+                    // EmployeeId is now the same as adminId (both are AdminInfo.Id)
+                    await sessionStorage.SetItemAsync("employeeId", idPart);
                 }
 
                 navigation.NavigateTo("/", forceLoad: true);

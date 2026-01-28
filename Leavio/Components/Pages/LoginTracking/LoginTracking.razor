@@ -1,0 +1,170 @@
+@page "/login-tracking"
+@using Leavio.DbModels
+@using Leavio.PanelService
+@using Microsoft.AspNetCore.Components
+@inject AdminPanelService adminPanelService
+
+<PageTitle>Login Tracking</PageTitle>
+
+<div class="login-tracking-container">
+    <div class="page-header">
+        <h1>Daily Login Tracking</h1>
+        <p class="subtitle">View user login and logout times</p>
+    </div>
+
+    <div class="filters-section">
+        <div class="filter-group">
+            <label for="employeeIdFilter">Employee ID:</label>
+            <input type="text" id="employeeIdFilter" @bind="employeeIdFilter" @bind:event="oninput" 
+                   placeholder="Filter by Employee ID" class="form-control" />
+        </div>
+
+        <div class="filter-group">
+            <label for="startDateFilter">Start Date:</label>
+            <input type="date" id="startDateFilter" @bind="startDateFilter" class="form-control" />
+        </div>
+
+        <div class="filter-group">
+            <label for="endDateFilter">End Date:</label>
+            <input type="date" id="endDateFilter" @bind="endDateFilter" class="form-control" />
+        </div>
+
+        <div class="filter-actions">
+            <button @onclick="LoadData" class="btn btn-primary">Filter</button>
+            <button @onclick="ClearFilters" class="btn btn-secondary">Clear</button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-message">
+            <p>Loading login tracking data...</p>
+        </div>
+    }
+    else if (loginTrackingData == null || !loginTrackingData.Any())
+    {
+        <div class="no-data-message">
+            <p>No login tracking data found.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="login-tracking-table">
+                <thead>
+                    <tr>
+                        <th>Employee ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Date</th>
+                        <th>First Login Time</th>
+                        <th>Last Logout Time</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var record in loginTrackingData)
+                    {
+                        <tr>
+                            <td>@record.EmployeeId</td>
+                            <td>@(record.Employee?.Name ?? "N/A")</td>
+                            <td>@(record.Employee?.Email ?? "N/A")</td>
+                            <td>@record.TrackingDate.ToString("yyyy-MM-dd")</td>
+                            <td>@record.FirstLoginTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>@(record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out")</td>
+                            <td>@GetDuration(record.FirstLoginTime, record.LastLogoutTime)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="summary-section">
+            <p><strong>Total Records:</strong> @loginTrackingData.Count</p>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            @errorMessage
+        </div>
+    }
+</div>
+
+@code {
+    private List<DailyLoginTracking>? loginTrackingData;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string employeeIdFilter = string.Empty;
+    private DateTime? startDateFilter;
+    private DateTime? endDateFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            int? employeeId = null;
+            if (!string.IsNullOrWhiteSpace(employeeIdFilter) && int.TryParse(employeeIdFilter, out var parsedId))
+            {
+                employeeId = parsedId;
+            }
+
+            loginTrackingData = await adminPanelService.GetDailyLoginTrackingAsync(
+                employeeId,
+                startDateFilter,
+                endDateFilter
+            );
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading data: {ex.Message}";
+            loginTrackingData = new List<DailyLoginTracking>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearFilters()
+    {
+        employeeIdFilter = string.Empty;
+        startDateFilter = null;
+        endDateFilter = null;
+        LoadData();
+    }
+
+    private string GetDuration(DateTime firstLogin, DateTime? lastLogout)
+    {
+        if (!lastLogout.HasValue)
+        {
+            return "Still logged in";
+        }
+
+        var duration = lastLogout.Value - firstLogin;
+        
+        if (duration.TotalDays >= 1)
+        {
+            return $"{(int)duration.TotalDays} day(s) {duration.Hours} hour(s) {duration.Minutes} minute(s)";
+        }
+        else if (duration.TotalHours >= 1)
+        {
+            return $"{duration.Hours} hour(s) {duration.Minutes} minute(s)";
+        }
+        else
+        {
+            return $"{duration.Minutes} minute(s) {duration.Seconds} second(s)";
+        }
+    }
+}
