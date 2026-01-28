@@ -4,6 +4,192 @@
     padding: 20px;
 }
 
+.report-section {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.report-type-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.report-type-label {
+    font-size: 14px;
+    color: #333;
+}
+
+.radio-group {
+    display: flex;
+    gap: 15px;
+    margin-top: 5px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #555;
+}
+
+.radio-label input[type="radio"] {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    accent-color: #007bff;
+}
+
+.date-range-group {
+    flex: 0 0 auto;
+}
+
+.btn-date-range {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 200px;
+    transition: background-color 0.3s;
+}
+
+.btn-date-range:hover {
+    background-color: #218838;
+}
+
+.resource-id-group {
+    flex: 0 0 auto;
+    min-width: 200px;
+}
+
+.resource-select {
+    width: 100%;
+    padding: 10px 35px 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+.resource-select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+    position: relative;
+}
+
+.btn-action {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    padding: 0;
+}
+
+.btn-action svg {
+    stroke: white;
+}
+
+.btn-view {
+    background-color: #28a745;
+}
+
+.btn-view:hover {
+    background-color: #218838;
+    transform: scale(1.05);
+}
+
+.btn-download {
+    background-color: #007bff;
+}
+
+.btn-download:hover {
+    background-color: #0056b3;
+    transform: scale(1.05);
+}
+
+.btn-options {
+    background-color: #dc3545;
+}
+
+.btn-options:hover {
+    background-color: #c82333;
+    transform: scale(1.05);
+}
+
+.options-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.3);
+    z-index: 999;
+}
+
+.options-menu {
+    position: absolute;
+    top: 50px;
+    right: 0;
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    min-width: 180px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.options-menu-item {
+    display: block;
+    width: 100%;
+    padding: 12px 20px;
+    text-align: left;
+    border: none;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.options-menu-item:hover {
+    background-color: #f8f9fa;
+}
+
+.options-menu-item:not(:last-child) {
+    border-bottom: 1px solid #e0e0e0;
+}
+
 .page-header {
     margin-bottom: 30px;
     text-align: center;

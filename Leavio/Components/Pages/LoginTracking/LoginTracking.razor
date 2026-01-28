@@ -2,7 +2,10 @@
 @using Leavio.DbModels
 @using Leavio.PanelService
 @using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@using System.Text
 @inject AdminPanelService adminPanelService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Login Tracking</PageTitle>
 
@@ -10,6 +13,45 @@
     <div class="page-header">
         <h1>Daily Login Tracking</h1>
         <p class="subtitle">View user login and logout times</p>
+    </div>
+
+    <div class="report-section">
+        <div class="report-type-group">
+            <label class="report-type-label"><strong>Report Type</strong></label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="reportType" value="Excel" checked="@(reportType == "Excel")" @onchange="@((ChangeEventArgs e) => reportType = e.Value?.ToString() ?? "Excel")" />
+                    Excel
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="reportType" value="PDF" checked="@(reportType == "PDF")" @onchange="@((ChangeEventArgs e) => reportType = e.Value?.ToString() ?? "PDF")" />
+                    PDF
+                </label>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-action btn-view" @onclick="ViewReport" title="View Report">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+            <button class="btn-action btn-download" @onclick="DownloadReport" title="Download Report">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+            </button>
+            <button class="btn-action btn-options" @onclick="ShowOptions" title="Options">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="1.5"></circle>
+                    <circle cx="12" cy="12" r="1.5"></circle>
+                    <circle cx="12" cy="19" r="1.5"></circle>
+                </svg>
+            </button>
+        </div>
     </div>
 
     <div class="filters-section">
@@ -90,6 +132,16 @@
             @errorMessage
         </div>
     }
+
+    @if (showOptionsMenu)
+    {
+        <div class="options-menu-overlay" @onclick="CloseOptionsMenu"></div>
+        <div class="options-menu">
+            <button class="options-menu-item" @onclick="ExportToCSV">Export to CSV</button>
+            <button class="options-menu-item" @onclick="PrintReport">Print Report</button>
+            <button class="options-menu-item" @onclick="RefreshData">Refresh Data</button>
+        </div>
+    }
 </div>
 
 @code {
@@ -99,10 +151,37 @@
     private string employeeIdFilter = string.Empty;
     private DateTime? startDateFilter;
     private DateTime? endDateFilter;
+    
+    // Report generation properties
+    private string reportType = "Excel";
+    private bool showOptionsMenu = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Ensure JavaScript functions are available
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("eval", @"
+                    if (typeof window.downloadFile === 'undefined' || typeof window.openPrintWindow === 'undefined') {
+                        var script = document.createElement('script');
+                        script.src = '/js/reportUtils.js';
+                        script.async = false;
+                        document.head.appendChild(script);
+                    }
+                ");
+            }
+            catch
+            {
+                // Script might already be loaded, ignore error
+            }
+        }
     }
 
     private async Task LoadData()
@@ -137,12 +216,12 @@
         }
     }
 
-    private void ClearFilters()
+    private async Task ClearFilters()
     {
         employeeIdFilter = string.Empty;
         startDateFilter = null;
         endDateFilter = null;
-        LoadData();
+        await LoadData();
     }
 
     private string GetDuration(DateTime firstLogin, DateTime? lastLogout)
@@ -166,5 +245,241 @@
         {
             return $"{duration.Minutes} minute(s) {duration.Seconds} second(s)";
         }
+    }
+
+    private async Task ViewReport()
+    {
+        if (loginTrackingData == null || !loginTrackingData.Any())
+        {
+            errorMessage = "No data available to view. Please load data first.";
+            StateHasChanged();
+            return;
+        }
+
+        // Scroll to the table to show the data
+        await JSRuntime.InvokeVoidAsync("eval", "window.scrollTo({ top: document.querySelector('.table-container')?.offsetTop || 0, behavior: 'smooth' })");
+    }
+
+    private async Task DownloadReport()
+    {
+        if (loginTrackingData == null || !loginTrackingData.Any())
+        {
+            errorMessage = "No data available to download. Please load data first.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            if (reportType == "Excel")
+            {
+                await ExportToExcel();
+            }
+            else if (reportType == "PDF")
+            {
+                await ExportToPDF();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error generating report: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private void ShowOptions()
+    {
+        showOptionsMenu = !showOptionsMenu;
+        StateHasChanged();
+    }
+
+    private void CloseOptionsMenu()
+    {
+        showOptionsMenu = false;
+        StateHasChanged();
+    }
+
+    private async Task ExportToExcel()
+    {
+        if (loginTrackingData == null || !loginTrackingData.Any())
+            return;
+
+        var csv = GenerateCSV();
+        var fileName = $"LoginTracking_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        await DownloadFile(csv, fileName, "text/csv");
+    }
+
+    private async Task ExportToPDF()
+    {
+        if (loginTrackingData == null || !loginTrackingData.Any())
+            return;
+
+        var html = GeneratePDFHTML();
+        var fileName = $"LoginTracking_{DateTime.Now:yyyyMMdd_HHmmss}.html";
+        await DownloadFile(html, fileName, "text/html");
+        
+        // Also open in new window for printing
+        await JSRuntime.InvokeVoidAsync("openPrintWindow", html);
+    }
+
+    private string GenerateCSV()
+    {
+        var sb = new StringBuilder();
+        
+        // Header
+        sb.AppendLine("Employee ID,Name,Email,Date,First Login Time,Last Logout Time,Duration");
+        
+        // Data rows
+        foreach (var record in loginTrackingData!)
+        {
+            var name = record.Employee?.Name ?? "N/A";
+            var email = record.Employee?.Email ?? "N/A";
+            var date = record.TrackingDate.ToString("yyyy-MM-dd");
+            var firstLogin = record.FirstLoginTime.ToString("yyyy-MM-dd HH:mm:ss");
+            var lastLogout = record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out";
+            var duration = GetDuration(record.FirstLoginTime, record.LastLogoutTime);
+            
+            // Escape commas and quotes in CSV
+            sb.AppendLine($"{record.EmployeeId},\"{name}\",\"{email}\",{date},{firstLogin},{lastLogout},\"{duration}\"");
+        }
+        
+        return sb.ToString();
+    }
+
+    private string GeneratePDFHTML()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<!DOCTYPE html>");
+        sb.AppendLine("<html>");
+        sb.AppendLine("<head>");
+        sb.AppendLine("<meta charset='utf-8'>");
+        sb.AppendLine("<title>Login Tracking Report</title>");
+        sb.AppendLine("<style>");
+        sb.AppendLine("body { font-family: Arial, sans-serif; margin: 20px; }");
+        sb.AppendLine("h1 { color: #333; text-align: center; }");
+        sb.AppendLine("table { width: 100%; border-collapse: collapse; margin-top: 20px; }");
+        sb.AppendLine("th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }");
+        sb.AppendLine("th { background-color: #007bff; color: white; font-weight: bold; }");
+        sb.AppendLine("tr:nth-child(even) { background-color: #f8f9fa; }");
+        sb.AppendLine(".summary { margin-top: 20px; padding: 15px; background-color: #e9ecef; border-radius: 4px; }");
+        sb.AppendLine("@media print { body { margin: 0; } }");
+        sb.AppendLine("</style>");
+        sb.AppendLine("</head>");
+        sb.AppendLine("<body>");
+        sb.AppendLine("<h1>Daily Login Tracking Report</h1>");
+        sb.AppendLine($"<p><strong>Generated:</strong> {DateTime.Now:yyyy-MM-dd HH:mm:ss}</p>");
+        
+        if (startDateFilter.HasValue || endDateFilter.HasValue)
+        {
+            sb.AppendLine($"<p><strong>Date Range:</strong> " +
+                $"{(startDateFilter.HasValue ? startDateFilter.Value.ToString("yyyy-MM-dd") : "All")} - " +
+                $"{(endDateFilter.HasValue ? endDateFilter.Value.ToString("yyyy-MM-dd") : "All")}</p>");
+        }
+        
+        if (!string.IsNullOrWhiteSpace(employeeIdFilter))
+        {
+            sb.AppendLine($"<p><strong>Employee ID Filter:</strong> {employeeIdFilter}</p>");
+        }
+        
+        sb.AppendLine("<table>");
+        sb.AppendLine("<thead>");
+        sb.AppendLine("<tr>");
+        sb.AppendLine("<th>Employee ID</th>");
+        sb.AppendLine("<th>Name</th>");
+        sb.AppendLine("<th>Email</th>");
+        sb.AppendLine("<th>Date</th>");
+        sb.AppendLine("<th>First Login Time</th>");
+        sb.AppendLine("<th>Last Logout Time</th>");
+        sb.AppendLine("<th>Duration</th>");
+        sb.AppendLine("</tr>");
+        sb.AppendLine("</thead>");
+        sb.AppendLine("<tbody>");
+        
+        foreach (var record in loginTrackingData!)
+        {
+            sb.AppendLine("<tr>");
+            sb.AppendLine($"<td>{record.EmployeeId}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(record.Employee?.Name ?? "N/A")}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(record.Employee?.Email ?? "N/A")}</td>");
+            sb.AppendLine($"<td>{record.TrackingDate:yyyy-MM-dd}</td>");
+            sb.AppendLine($"<td>{record.FirstLoginTime:yyyy-MM-dd HH:mm:ss}</td>");
+            sb.AppendLine($"<td>{(record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out")}</td>");
+            sb.AppendLine($"<td>{GetDuration(record.FirstLoginTime, record.LastLogoutTime)}</td>");
+            sb.AppendLine("</tr>");
+        }
+        
+        sb.AppendLine("</tbody>");
+        sb.AppendLine("</table>");
+        sb.AppendLine($"<div class='summary'><strong>Total Records:</strong> {loginTrackingData.Count}</div>");
+        sb.AppendLine("</body>");
+        sb.AppendLine("</html>");
+        
+        return sb.ToString();
+    }
+
+    private async Task DownloadFile(string content, string fileName, string contentType)
+    {
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(content);
+            var base64 = Convert.ToBase64String(bytes);
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, base64, contentType);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error downloading file: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportToCSV()
+    {
+        showOptionsMenu = false;
+        StateHasChanged();
+        await ExportToExcel();
+    }
+
+    private async Task PrintReport()
+    {
+        showOptionsMenu = false;
+        StateHasChanged();
+        
+        if (loginTrackingData == null || !loginTrackingData.Any())
+        {
+            errorMessage = "No data available to print. Please load data first.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            var html = GeneratePDFHTML();
+            await JSRuntime.InvokeVoidAsync("openPrintWindow", html);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error printing report: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        showOptionsMenu = false;
+        StateHasChanged();
+        await LoadData();
+    }
+
+    private string EscapeHtml(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+        
+        return text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("'", "&#39;");
     }
 }
