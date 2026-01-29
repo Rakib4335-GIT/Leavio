@@ -301,6 +301,30 @@
     text-align: left;
     font-weight: 600;
     border-bottom: 2px solid #0056b3;
+    position: sticky;
+    top: 0;
+}
+
+.login-tracking-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+    position: relative;
+    padding-right: 25px;
+}
+
+.login-tracking-table th.sortable:hover {
+    background-color: #0056b3;
+}
+
+.sort-icon {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: white;
+    font-weight: bold;
 }
 
 .login-tracking-table td {
@@ -341,6 +365,95 @@
     border: 1px solid #f5c6cb;
 }
 
+/* Pagination Styles */
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.pagination-info {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.pagination-controls {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.pagination-btn {
+    padding: 8px 12px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    color: #333;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-width: 40px;
+    text-align: center;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.pagination-btn.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+    font-weight: bold;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f5f5f5;
+}
+
+.pagination-page-size {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pagination-page-size label {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.page-size-select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.page-size-select:focus {
+    border-color: #007bff;
+}
+
+.page-size-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
     .filters-section {
         flex-direction: column;
@@ -365,5 +478,43 @@
 
     .login-tracking-table {
         min-width: 800px;
+    }
+
+    .pagination-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .pagination-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+        min-width: 35px;
+    }
+
+    .pagination-info {
+        text-align: center;
+        font-size: 12px;
+    }
+
+    .pagination-page-size {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .pagination-page-size label {
+        font-size: 12px;
+    }
+
+    .page-size-select {
+        font-size: 12px;
+        padding: 5px 8px;
     }
 }

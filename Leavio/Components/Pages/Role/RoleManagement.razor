@@ -87,29 +87,94 @@ else
             <h2>Existing Roles</h2>
             @if (roles.Any())
             {
-                <table class="roles-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Role Name</th>
-                            <th>Description</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var role in roles)
-                        {
+                <div class="table-container">
+                    <table class="roles-table">
+                        <thead>
                             <tr>
-                                <td>@role.Id</td>
-                                <td>@role.RoleName</td>
-                                <td>@(role.Description ?? "N/A")</td>
-                                <td>
-                                    <button @onclick="() => DeleteRole(role.Id)" class="btn-delete" disabled="@isProcessing">Delete</button>
-                                </td>
+                                <th>SL No.</th>
+                                <th class="sortable" @onclick='() => SortByColumn("RoleName")'>
+                                    Role Name
+                                    @if (sortColumn == "RoleName")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th class="sortable" @onclick='() => SortByColumn("Description")'>
+                                    Description
+                                    @if (sortColumn == "Description")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th>Actions</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in paginatedRoles.Select((role, index) => new { role, index }))
+                            {
+                                var serialNumber = (currentPage - 1) * pageSize + item.index + 1;
+                                <tr>
+                                    <td>@serialNumber</td>
+                                    <td>@item.role.RoleName</td>
+                                    <td>@(item.role.Description ?? "N/A")</td>
+                                    <td>
+                                        <button @onclick="() => DeleteRole(item.role.Id)" class="btn-delete" disabled="@isProcessing">Delete</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Controls -->
+                @if (totalPages > 0)
+                {
+                    <div class="pagination-container">
+                        <div class="pagination-info">
+                            Showing @((currentPage - 1) * pageSize + 1) to @(Math.Min(currentPage * pageSize, totalRecords)) of @totalRecords entries
+                        </div>
+                        <div class="pagination-controls">
+                            <button @onclick="GoToFirstPage" class="pagination-btn" disabled="@(currentPage == 1 || isProcessing)" title="First Page">
+                                &laquo;&laquo;
+                            </button>
+                            <button @onclick="GoToPreviousPage" class="pagination-btn" disabled="@(currentPage == 1 || isProcessing)" title="Previous">
+                                &laquo;
+                            </button>
+                            
+                            @for (int i = startPage; i <= endPage; i++)
+                            {
+                                var pageNum = i;
+                                <button @onclick="() => GoToPage(pageNum)" class="pagination-btn @(currentPage == pageNum ? "active" : "")" disabled="@isProcessing">
+                                    @pageNum
+                                </button>
+                            }
+                            
+                            <button @onclick="GoToNextPage" class="pagination-btn" disabled="@(currentPage == totalPages || isProcessing)" title="Next">
+                                &raquo;
+                            </button>
+                            <button @onclick="GoToLastPage" class="pagination-btn" disabled="@(currentPage == totalPages || isProcessing)" title="Last Page">
+                                &raquo;&raquo;
+                            </button>
+                        </div>
+                        <div class="pagination-page-size">
+                            <label for="pageSizeSelect">Items per page:</label>
+                            <select id="pageSizeSelect" @bind="pageSize" @bind:after="OnPageSizeChanged" class="page-size-select" disabled="@isProcessing">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                    </div>
+                }
             }
             else
             {
@@ -133,6 +198,54 @@ else
     private bool isAuthorized = false;
     private bool isCheckingAuth = true;
     private bool registrationEnabled = true;
+    
+    // Pagination variables
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private string sortColumn = "RoleName";
+    private string sortDirection = "asc";
+    private int totalPages => (int)Math.Ceiling((double)sortedRoles.Count() / pageSize);
+    private int totalRecords => sortedRoles.Count();
+    private int startPage => Math.Max(1, currentPage - 2);
+    private int endPage => Math.Min(totalPages, currentPage + 2);
+    
+    // Sorted data
+    private IEnumerable<DbModels.Role> sortedRoles
+    {
+        get
+        {
+            if (roles == null || !roles.Any())
+                return Enumerable.Empty<DbModels.Role>();
+            
+            var sorted = roles.AsEnumerable();
+            
+            switch (sortColumn)
+            {
+                case "Id":
+                    sorted = sortDirection == "asc" 
+                        ? sorted.OrderBy(x => x.Id)
+                        : sorted.OrderByDescending(x => x.Id);
+                    break;
+                case "RoleName":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.RoleName ?? "")
+                        : sorted.OrderByDescending(x => x.RoleName ?? "");
+                    break;
+                case "Description":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.Description ?? "N/A")
+                        : sorted.OrderByDescending(x => x.Description ?? "N/A");
+                    break;
+            }
+            
+            return sorted;
+        }
+    }
+    
+    // Paginated data
+    private IEnumerable<DbModels.Role> paginatedRoles => sortedRoles
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -207,6 +320,16 @@ else
         try
         {
             roles = await adminPanelService.GetAllRolesAsync();
+            
+            // Adjust current page if it's beyond total pages
+            if (currentPage > totalPages && totalPages > 0)
+            {
+                currentPage = totalPages;
+            }
+            else if (totalPages == 0)
+            {
+                currentPage = 1;
+            }
         }
         catch (Exception ex)
         {
@@ -219,10 +342,37 @@ else
     {
         if (isProcessing) return;
 
+        // Validation
         if (string.IsNullOrWhiteSpace(newRole.RoleName))
         {
             alertMessage = "Role name is required.";
             isSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        // Trim whitespace
+        newRole.RoleName = newRole.RoleName.Trim();
+        if (!string.IsNullOrWhiteSpace(newRole.Description))
+        {
+            newRole.Description = newRole.Description.Trim();
+        }
+
+        // Validate role name length
+        if (newRole.RoleName.Length > 50)
+        {
+            alertMessage = "Role name cannot exceed 50 characters.";
+            isSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        // Validate description length
+        if (!string.IsNullOrWhiteSpace(newRole.Description) && newRole.Description.Length > 500)
+        {
+            alertMessage = "Description cannot exceed 500 characters.";
+            isSuccess = false;
+            StateHasChanged();
             return;
         }
 
@@ -242,6 +392,8 @@ else
             {
                 alertMessage = "A role with this name already exists.";
                 isSuccess = false;
+                isProcessing = false;
+                StateHasChanged();
                 return;
             }
 
@@ -255,6 +407,11 @@ else
             isSuccess = true;
             newRole = new DbModels.Role();
             await LoadRoles();
+            // Go to last page to see the newly added role
+            if (totalPages > 0)
+            {
+                currentPage = totalPages;
+            }
         }
         catch (Exception ex)
         {
@@ -264,6 +421,7 @@ else
         finally
         {
             isProcessing = false;
+            StateHasChanged();
         }
     }
 
@@ -286,6 +444,8 @@ else
             {
                 alertMessage = "Cannot delete role. It is assigned to one or more users.";
                 isSuccess = false;
+                isProcessing = false;
+                StateHasChanged();
                 return;
             }
 
@@ -301,6 +461,11 @@ else
                 alertMessage = "Role deleted successfully!";
                 isSuccess = true;
                 await LoadRoles();
+                // Reset to first page if current page is empty after deletion
+                if (currentPage > totalPages && totalPages > 0)
+                {
+                    currentPage = totalPages;
+                }
             }
         }
         catch (Exception ex)
@@ -311,6 +476,81 @@ else
         finally
         {
             isProcessing = false;
+            StateHasChanged();
         }
+    }
+
+    // Pagination methods
+    private void GoToPage(int page)
+    {
+        if (page >= 1 && page <= totalPages && !isProcessing)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToNextPage()
+    {
+        if (currentPage < totalPages && !isProcessing)
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToPreviousPage()
+    {
+        if (currentPage > 1 && !isProcessing)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToFirstPage()
+    {
+        if (currentPage != 1 && !isProcessing)
+        {
+            currentPage = 1;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToLastPage()
+    {
+        if (currentPage != totalPages && totalPages > 0 && !isProcessing)
+        {
+            currentPage = totalPages;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPageSizeChanged()
+    {
+        // Reset to first page when page size changes
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortByColumn(string column)
+    {
+        if (isProcessing) return;
+
+        if (sortColumn == column)
+        {
+            // Toggle sort direction if clicking the same column
+            sortDirection = sortDirection == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            // Set new sort column and default to ascending
+            sortColumn = column;
+            sortDirection = "asc";
+        }
+
+        // Reset to first page when sorting changes
+        currentPage = 1;
+        StateHasChanged();
     }
 }

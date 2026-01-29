@@ -98,34 +98,140 @@
             <table class="login-tracking-table">
                 <thead>
                     <tr>
-                        <th>Employee ID</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Date</th>
-                        <th>First Login Time</th>
-                        <th>Last Logout Time</th>
+                        <th>SL No.</th>
+                        <th class="sortable" @onclick='() => SortByColumn("EmployeeId")'>
+                            Employee ID
+                            @if (sortColumn == "EmployeeId")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th class="sortable" @onclick='() => SortByColumn("Name")'>
+                            Name
+                            @if (sortColumn == "Name")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th class="sortable" @onclick='() => SortByColumn("Email")'>
+                            Email
+                            @if (sortColumn == "Email")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th class="sortable" @onclick='() => SortByColumn("Date")'>
+                            Date
+                            @if (sortColumn == "Date")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th class="sortable" @onclick='() => SortByColumn("FirstLoginTime")'>
+                            First Login Time
+                            @if (sortColumn == "FirstLoginTime")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th class="sortable" @onclick='() => SortByColumn("LastLogoutTime")'>
+                            Last Logout Time
+                            @if (sortColumn == "LastLogoutTime")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
                         <th>Duration</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var record in loginTrackingData)
+                    @foreach (var item in paginatedLoginTrackingData.Select((record, index) => new { record, index }))
                     {
+                        var serialNumber = (currentPage - 1) * pageSize + item.index + 1;
                         <tr>
-                            <td>@record.EmployeeId</td>
-                            <td>@(record.Employee?.Name ?? "N/A")</td>
-                            <td>@(record.Employee?.Email ?? "N/A")</td>
-                            <td>@record.TrackingDate.ToString("yyyy-MM-dd")</td>
-                            <td>@record.FirstLoginTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                            <td>@(record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out")</td>
-                            <td>@GetDuration(record.FirstLoginTime, record.LastLogoutTime)</td>
+                            <td>@serialNumber</td>
+                            <td>@item.record.EmployeeId</td>
+                            <td>@(item.record.Employee?.Name ?? "N/A")</td>
+                            <td>@(item.record.Employee?.Email ?? "N/A")</td>
+                            <td>@item.record.TrackingDate.ToString("yyyy-MM-dd")</td>
+                            <td>@item.record.FirstLoginTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>@(item.record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out")</td>
+                            <td>@GetDuration(item.record.FirstLoginTime, item.record.LastLogoutTime)</td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
 
+        <!-- Pagination Controls -->
+        @if (totalPages > 0)
+        {
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing @((currentPage - 1) * pageSize + 1) to @(Math.Min(currentPage * pageSize, totalRecords)) of @totalRecords entries
+                </div>
+                <div class="pagination-controls">
+                    <button @onclick="GoToFirstPage" class="pagination-btn" disabled="@(currentPage == 1 || isLoading)" title="First Page">
+                        &laquo;&laquo;
+                    </button>
+                    <button @onclick="GoToPreviousPage" class="pagination-btn" disabled="@(currentPage == 1 || isLoading)" title="Previous">
+                        &laquo;
+                    </button>
+                    
+                    @for (int i = startPage; i <= endPage; i++)
+                    {
+                        var pageNum = i;
+                        <button @onclick="() => GoToPage(pageNum)" class="pagination-btn @(currentPage == pageNum ? "active" : "")" disabled="@isLoading">
+                            @pageNum
+                        </button>
+                    }
+                    
+                    <button @onclick="GoToNextPage" class="pagination-btn" disabled="@(currentPage == totalPages || isLoading)" title="Next">
+                        &raquo;
+                    </button>
+                    <button @onclick="GoToLastPage" class="pagination-btn" disabled="@(currentPage == totalPages || isLoading)" title="Last Page">
+                        &raquo;&raquo;
+                    </button>
+                </div>
+                <div class="pagination-page-size">
+                    <label for="pageSizeSelect">Items per page:</label>
+                    <select id="pageSizeSelect" @bind="pageSize" @bind:after="OnPageSizeChanged" class="page-size-select" disabled="@isLoading">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+        }
+
         <div class="summary-section">
-            <p><strong>Total Records:</strong> @loginTrackingData.Count</p>
+            <p><strong>Total Records:</strong> @totalRecords</p>
         </div>
     }
 
@@ -158,6 +264,69 @@
     // Report generation properties
     private string reportType = "Excel";
     private bool showOptionsMenu = false;
+    
+    // Pagination variables
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private string sortColumn = "Date";
+    private string sortDirection = "desc";
+    private int totalPages => (int)Math.Ceiling((double)sortedLoginTrackingData.Count() / pageSize);
+    private int totalRecords => sortedLoginTrackingData.Count();
+    private int startPage => Math.Max(1, currentPage - 2);
+    private int endPage => Math.Min(totalPages, currentPage + 2);
+    
+    // Sorted data
+    private IEnumerable<DailyLoginTracking> sortedLoginTrackingData
+    {
+        get
+        {
+            if (loginTrackingData == null || !loginTrackingData.Any())
+                return Enumerable.Empty<DailyLoginTracking>();
+            
+            var sorted = loginTrackingData.AsEnumerable();
+            
+            switch (sortColumn)
+            {
+                case "EmployeeId":
+                    sorted = sortDirection == "asc" 
+                        ? sorted.OrderBy(x => x.EmployeeId)
+                        : sorted.OrderByDescending(x => x.EmployeeId);
+                    break;
+                case "Name":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.Employee?.Name ?? "N/A")
+                        : sorted.OrderByDescending(x => x.Employee?.Name ?? "N/A");
+                    break;
+                case "Email":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.Employee?.Email ?? "N/A")
+                        : sorted.OrderByDescending(x => x.Employee?.Email ?? "N/A");
+                    break;
+                case "Date":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.TrackingDate)
+                        : sorted.OrderByDescending(x => x.TrackingDate);
+                    break;
+                case "FirstLoginTime":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.FirstLoginTime)
+                        : sorted.OrderByDescending(x => x.FirstLoginTime);
+                    break;
+                case "LastLogoutTime":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.LastLogoutTime ?? DateTime.MaxValue)
+                        : sorted.OrderByDescending(x => x.LastLogoutTime ?? DateTime.MinValue);
+                    break;
+            }
+            
+            return sorted;
+        }
+    }
+    
+    // Paginated data
+    private IEnumerable<DailyLoginTracking> paginatedLoginTrackingData => sortedLoginTrackingData
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
 
     protected override async Task OnInitializedAsync()
     {
@@ -196,9 +365,28 @@
         try
         {
             int? employeeId = null;
-            if (!string.IsNullOrWhiteSpace(employeeIdFilter) && int.TryParse(employeeIdFilter, out var parsedId))
+            if (!string.IsNullOrWhiteSpace(employeeIdFilter))
             {
-                employeeId = parsedId;
+                if (int.TryParse(employeeIdFilter, out var parsedId))
+                {
+                    employeeId = parsedId;
+                }
+                else
+                {
+                    errorMessage = "Invalid Employee ID. Please enter a valid number.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            // Validate date range
+            if (startDateFilter.HasValue && endDateFilter.HasValue && startDateFilter.Value > endDateFilter.Value)
+            {
+                errorMessage = "Start date cannot be greater than end date.";
+                isLoading = false;
+                StateHasChanged();
+                return;
             }
 
             loginTrackingData = await adminPanelService.GetDailyLoginTrackingAsync(
@@ -206,6 +394,16 @@
                 startDateFilter,
                 endDateFilter
             );
+            
+            // Adjust current page if it's beyond total pages
+            if (currentPage > totalPages && totalPages > 0)
+            {
+                currentPage = totalPages;
+            }
+            else if (totalPages == 0)
+            {
+                currentPage = 1;
+            }
         }
         catch (Exception ex)
         {
@@ -337,10 +535,11 @@
         var sb = new StringBuilder();
         
         // Header
-        sb.AppendLine("Employee ID,Name,Email,Date,First Login Time,Last Logout Time,Duration");
+        sb.AppendLine("SL No.,Employee ID,Name,Email,Date,First Login Time,Last Logout Time,Duration");
         
-        // Data rows
-        foreach (var record in loginTrackingData!)
+        // Data rows - use sorted data
+        int serialNumber = 1;
+        foreach (var record in sortedLoginTrackingData)
         {
             var name = record.Employee?.Name ?? "N/A";
             var email = record.Employee?.Email ?? "N/A";
@@ -350,7 +549,8 @@
             var duration = GetDuration(record.FirstLoginTime, record.LastLogoutTime);
             
             // Escape commas and quotes in CSV
-            sb.AppendLine($"{record.EmployeeId},\"{name}\",\"{email}\",{date},{firstLogin},{lastLogout},\"{duration}\"");
+            sb.AppendLine($"{serialNumber},{record.EmployeeId},\"{name}\",\"{email}\",{date},{firstLogin},{lastLogout},\"{duration}\"");
+            serialNumber++;
         }
         
         return sb.ToString();
@@ -389,9 +589,11 @@
 
                 page.Content().PaddingTop(10).Table(table =>
                 {
+
                     // Define columns
                     table.ColumnsDefinition(columns =>
                     {
+                        columns.ConstantColumn(40);  // SL No.
                         columns.ConstantColumn(60);  // Employee ID
                         columns.RelativeColumn(2);   // Name
                         columns.RelativeColumn(3);   // Email
@@ -404,6 +606,8 @@
                     // Header
                     table.Header(header =>
                     {
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("SL No.").FontColor(Colors.White).Bold();
                         header.Cell().Background(Colors.Blue.Darken3).Padding(5)
                             .Text("Employee ID").FontColor(Colors.White).Bold();
                         header.Cell().Background(Colors.Blue.Darken3).Padding(5)
@@ -420,13 +624,16 @@
                             .Text("Duration").FontColor(Colors.White).Bold();
                     });
 
-                    // Data rows
+                    // Data rows - use sorted data
                     int rowIndex = 0;
-                    foreach (var record in loginTrackingData!)
+                    int serialNumber = 1;
+                    foreach (var record in sortedLoginTrackingData)
                     {
                         var bgColor = rowIndex % 2 == 0 ? Colors.White : Colors.Grey.Lighten3;
                         rowIndex++;
 
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(serialNumber.ToString());
                         table.Cell().Background(bgColor).Padding(5)
                             .Text(record.EmployeeId.ToString());
                         table.Cell().Background(bgColor).Padding(5)
@@ -441,6 +648,7 @@
                             .Text(record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out").FontSize(8);
                         table.Cell().Background(bgColor).Padding(5)
                             .Text(GetDuration(record.FirstLoginTime, record.LastLogoutTime)).FontSize(8);
+                        serialNumber++;
                     }
                 });
 
@@ -497,6 +705,7 @@
         sb.AppendLine("<table>");
         sb.AppendLine("<thead>");
         sb.AppendLine("<tr>");
+        sb.AppendLine("<th>SL No.</th>");
         sb.AppendLine("<th>Employee ID</th>");
         sb.AppendLine("<th>Name</th>");
         sb.AppendLine("<th>Email</th>");
@@ -508,9 +717,11 @@
         sb.AppendLine("</thead>");
         sb.AppendLine("<tbody>");
         
-        foreach (var record in loginTrackingData!)
+        int serialNumber = 1;
+        foreach (var record in sortedLoginTrackingData)
         {
             sb.AppendLine("<tr>");
+            sb.AppendLine($"<td>{serialNumber}</td>");
             sb.AppendLine($"<td>{record.EmployeeId}</td>");
             sb.AppendLine($"<td>{EscapeHtml(record.Employee?.Name ?? "N/A")}</td>");
             sb.AppendLine($"<td>{EscapeHtml(record.Employee?.Email ?? "N/A")}</td>");
@@ -519,11 +730,12 @@
             sb.AppendLine($"<td>{(record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out")}</td>");
             sb.AppendLine($"<td>{GetDuration(record.FirstLoginTime, record.LastLogoutTime)}</td>");
             sb.AppendLine("</tr>");
+            serialNumber++;
         }
         
         sb.AppendLine("</tbody>");
         sb.AppendLine("</table>");
-        sb.AppendLine($"<div class='summary'><strong>Total Records:</strong> {loginTrackingData.Count}</div>");
+        sb.AppendLine($"<div class='summary'><strong>Total Records:</strong> {totalRecords}</div>");
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
         
@@ -594,5 +806,79 @@
             .Replace(">", "&gt;")
             .Replace("\"", "&quot;")
             .Replace("'", "&#39;");
+    }
+
+    // Pagination methods
+    private void GoToPage(int page)
+    {
+        if (page >= 1 && page <= totalPages && !isLoading)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToNextPage()
+    {
+        if (currentPage < totalPages && !isLoading)
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToPreviousPage()
+    {
+        if (currentPage > 1 && !isLoading)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToFirstPage()
+    {
+        if (currentPage != 1 && !isLoading)
+        {
+            currentPage = 1;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToLastPage()
+    {
+        if (currentPage != totalPages && totalPages > 0 && !isLoading)
+        {
+            currentPage = totalPages;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPageSizeChanged()
+    {
+        // Reset to first page when page size changes
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortByColumn(string column)
+    {
+        if (isLoading) return;
+
+        if (sortColumn == column)
+        {
+            // Toggle sort direction if clicking the same column
+            sortDirection = sortDirection == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            // Set new sort column and default to ascending
+            sortColumn = column;
+            sortDirection = "asc";
+        }
+
+        // Reset to first page when sorting changes
+        currentPage = 1;
+        StateHasChanged();
     }
 }
