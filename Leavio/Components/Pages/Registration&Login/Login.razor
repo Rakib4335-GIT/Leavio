@@ -51,22 +51,20 @@
                 </div>
             </div>
 
+            @* CAPTCHA Section - Commented Out
             <div class="input-group">
                 <label for="captcha">CAPTCHA</label>
                 <div class="captcha-container">
                     <div class="captcha-display">
                         <div class="captcha-image" @ref="captchaContainer" style="@GetCaptchaBackgroundStyle()">
-                            @* Background noise dots *@
                             @foreach (var dot in captchaDots)
                             {
                                 <div class="captcha-dot" style="@dot"></div>
                             }
-                            @* Noise lines *@
                             @foreach (var line in captchaLines)
                             {
                                 <div class="captcha-line" style="@line"></div>
                             }
-                            @* CAPTCHA characters *@
                             @for (int i = 0; i < captchaText.Length; i++)
                             {
                                 var charIndex = i;
@@ -95,6 +93,7 @@
                     }
                 </div>
             </div>
+            *@
 
             <div class="forgot-password">
                 <a href="#" class="forgot-link">Forgot password?</a>
@@ -169,7 +168,7 @@
 
     protected override void OnInitialized()
     {
-        GenerateCaptcha();
+        // GenerateCaptcha(); // CAPTCHA commented out
     }
 
     private void GenerateCaptcha()
@@ -270,12 +269,12 @@
     {
         if (isProcessing) return;
 
-        // Validate CAPTCHA first
-        if (!ValidateCaptcha())
-        {
-            GenerateCaptcha(); // Generate new CAPTCHA on error
-            return;
-        }
+        // CAPTCHA validation commented out
+        // if (!ValidateCaptcha())
+        // {
+        //     GenerateCaptcha(); // Generate new CAPTCHA on error
+        //     return;
+        // }
 
         isProcessing = true;
         alertMessage = string.Empty;
@@ -329,14 +328,14 @@
             {
                 alertMessage = response.Message;
                 isSuccess = false;
-                GenerateCaptcha(); // Generate new CAPTCHA on login failure
+                // GenerateCaptcha(); // CAPTCHA commented out
             }
         }
         catch (Exception ex)
         {
             alertMessage = $"An error occurred: {ex.Message}";
             isSuccess = false;
-            GenerateCaptcha(); // Generate new CAPTCHA on error
+            // GenerateCaptcha(); // CAPTCHA commented out
         }
         finally
         {
