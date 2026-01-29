@@ -108,22 +108,20 @@
                     </div>
                 </div>
 
+                @* CAPTCHA Section - Commented Out
                 <div class="input-group">
                     <label for="captcha">CAPTCHA</label>
                     <div class="captcha-container">
                         <div class="captcha-display">
                             <div class="captcha-image" @ref="captchaContainer" style="@GetCaptchaBackgroundStyle()">
-                                @* Background noise dots *@
                                 @foreach (var dot in captchaDots)
                                 {
                                     <div class="captcha-dot" style="@dot"></div>
                                 }
-                                @* Noise lines *@
                                 @foreach (var line in captchaLines)
                                 {
                                     <div class="captcha-line" style="@line"></div>
                                 }
-                                @* CAPTCHA characters *@
                                 @for (int i = 0; i < captchaText.Length; i++)
                                 {
                                     var charIndex = i;
@@ -152,6 +150,7 @@
                         }
                     </div>
                 </div>
+                *@
             </div>
 
             <div class="input-group" style="display: none;">
@@ -247,7 +246,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        GenerateCaptcha();
+        // GenerateCaptcha(); // CAPTCHA commented out
         // Roles are not needed since role field is hidden - this improves page load time
         availableRoles = new List<DbModels.Role>();
         await CheckRegistrationStatus();
@@ -294,12 +293,12 @@
             return;
         }
 
-        // Validate CAPTCHA first
-        if (!ValidateCaptcha())
-        {
-            GenerateCaptcha(); // Generate new CAPTCHA on error
-            return;
-        }
+        // CAPTCHA validation commented out
+        // if (!ValidateCaptcha())
+        // {
+        //     GenerateCaptcha(); // Generate new CAPTCHA on error
+        //     return;
+        // }
 
         // Validate email before submission
         ValidateEmail();
@@ -307,7 +306,7 @@
         {
             alertMessage = "Please enter a valid email address";
             isSuccess = false;
-            GenerateCaptcha(); // Generate new CAPTCHA on error
+            // GenerateCaptcha(); // CAPTCHA commented out
             return;
         }
 
@@ -326,7 +325,7 @@
             {
                 registrationModel = new RegistrationModel();
                 isEmailValid = null;
-                GenerateCaptcha(); // Generate new CAPTCHA after success
+                // GenerateCaptcha(); // CAPTCHA commented out
                 
                 // Show success message briefly, then redirect to login page
                 await Task.Delay(1500);
@@ -334,14 +333,14 @@
             }
             else
             {
-                GenerateCaptcha(); // Generate new CAPTCHA on registration failure
+                // GenerateCaptcha(); // CAPTCHA commented out
             }
         }
         catch (Exception ex)
         {
             alertMessage = $"An error occurred: {ex.Message}";
             isSuccess = false;
-            GenerateCaptcha(); // Generate new CAPTCHA on error
+            // GenerateCaptcha(); // CAPTCHA commented out
         }
         finally
         {
