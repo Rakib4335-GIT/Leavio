@@ -4,6 +4,9 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.JSInterop
 @using System.Text
+@using QuestPDF.Fluent
+@using QuestPDF.Helpers
+@using QuestPDF.Infrastructure
 @inject AdminPanelService adminPanelService
 @inject IJSRuntime JSRuntime
 
@@ -314,12 +317,19 @@
         if (loginTrackingData == null || !loginTrackingData.Any())
             return;
 
-        var html = GeneratePDFHTML();
-        var fileName = $"LoginTracking_{DateTime.Now:yyyyMMdd_HHmmss}.html";
-        await DownloadFile(html, fileName, "text/html");
-        
-        // Also open in new window for printing
-        await JSRuntime.InvokeVoidAsync("openPrintWindow", html);
+        try
+        {
+            // Generate PDF using QuestPDF
+            var pdfBytes = GeneratePDF();
+            var base64 = Convert.ToBase64String(pdfBytes);
+            var fileName = $"LoginTracking_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, base64, "application/pdf");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error generating PDF: {ex.Message}";
+            StateHasChanged();
+        }
     }
 
     private string GenerateCSV()
@@ -344,6 +354,109 @@
         }
         
         return sb.ToString();
+    }
+
+    private byte[] GeneratePDF()
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(1, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(10));
+
+                page.Header().Column(column =>
+                {
+                    column.Item().AlignCenter().Text("Daily Login Tracking Report")
+                        .FontSize(20).Bold().FontColor(Colors.Blue.Darken3);
+                    
+                    column.Item().PaddingTop(5).Text($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}")
+                        .FontSize(9);
+                    
+                    if (startDateFilter.HasValue || endDateFilter.HasValue)
+                    {
+                        column.Item().Text($"Date Range: {(startDateFilter.HasValue ? startDateFilter.Value.ToString("yyyy-MM-dd") : "All")} - {(endDateFilter.HasValue ? endDateFilter.Value.ToString("yyyy-MM-dd") : "All")}")
+                            .FontSize(9);
+                    }
+                    
+                    if (!string.IsNullOrWhiteSpace(employeeIdFilter))
+                    {
+                        column.Item().Text($"Employee ID Filter: {employeeIdFilter}")
+                            .FontSize(9);
+                    }
+                });
+
+                page.Content().PaddingTop(10).Table(table =>
+                {
+                    // Define columns
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.ConstantColumn(60);  // Employee ID
+                        columns.RelativeColumn(2);   // Name
+                        columns.RelativeColumn(3);   // Email
+                        columns.ConstantColumn(70);  // Date
+                        columns.RelativeColumn(2);   // First Login
+                        columns.RelativeColumn(2);   // Last Logout
+                        columns.RelativeColumn(2);   // Duration
+                    });
+
+                    // Header
+                    table.Header(header =>
+                    {
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("Employee ID").FontColor(Colors.White).Bold();
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("Name").FontColor(Colors.White).Bold();
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("Email").FontColor(Colors.White).Bold();
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("Date").FontColor(Colors.White).Bold();
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("First Login Time").FontColor(Colors.White).Bold();
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("Last Logout Time").FontColor(Colors.White).Bold();
+                        header.Cell().Background(Colors.Blue.Darken3).Padding(5)
+                            .Text("Duration").FontColor(Colors.White).Bold();
+                    });
+
+                    // Data rows
+                    int rowIndex = 0;
+                    foreach (var record in loginTrackingData!)
+                    {
+                        var bgColor = rowIndex % 2 == 0 ? Colors.White : Colors.Grey.Lighten3;
+                        rowIndex++;
+
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(record.EmployeeId.ToString());
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(record.Employee?.Name ?? "N/A");
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(record.Employee?.Email ?? "N/A").FontSize(8);
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(record.TrackingDate.ToString("yyyy-MM-dd"));
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(record.FirstLoginTime.ToString("yyyy-MM-dd HH:mm:ss")).FontSize(8);
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out").FontSize(8);
+                        table.Cell().Background(bgColor).Padding(5)
+                            .Text(GetDuration(record.FirstLoginTime, record.LastLogoutTime)).FontSize(8);
+                    }
+                });
+
+                page.Footer().AlignCenter().Text(text =>
+                {
+                    text.Span("Total Records: ").Bold();
+                    text.Span(loginTrackingData!.Count.ToString());
+                    text.Span(" | Page ");
+                    text.CurrentPageNumber();
+                    text.Span(" of ");
+                    text.TotalPages();
+                });
+            });
+        });
+
+        return document.GeneratePdf();
     }
 
     private string GeneratePDFHTML()

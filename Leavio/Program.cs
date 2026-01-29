@@ -3,6 +3,10 @@ using Leavio.DbModels;
 using Leavio.PanelService;
 using Microsoft.EntityFrameworkCore;
 using Blazored.SessionStorage;
+using QuestPDF.Infrastructure;
+
+// Configure QuestPDF license
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
