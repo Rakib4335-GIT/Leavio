@@ -42,8 +42,39 @@
         <div class="header-button">
             @if (isLoggedIn)
             {
-                <span class="welcome-message">Welcome, @userName! (@userRole)</span>
-                <button @onclick="Logout" class="btn btn-danger logout-btn">Logout</button>
+                <div class="user-dropdown" @onclick:stopPropagation="true">
+                    <button class="user-dropdown-trigger" @onclick="ToggleUserMenu">
+                        <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span class="user-name">@userName</span>
+                        <svg class="dropdown-arrow @(showUserMenu ? "open" : "")" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    @if (showUserMenu)
+                    {
+                        <div class="user-dropdown-overlay" @onclick="CloseUserMenu"></div>
+                        <div class="user-dropdown-menu">
+                            <button class="user-menu-item" @onclick="NavigateToProfile">
+                                <svg class="menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                <span>Profile</span>
+                            </button>
+                            <button class="user-menu-item logout-item" @onclick="Logout">
+                                <svg class="menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                    }
+                </div>
             }
             else
             {
@@ -81,6 +112,7 @@
     private bool isAdmin = false;
     private bool showImageModal = false;
     private bool showMenu = false;
+    private bool showUserMenu = false;
 
     private void ShowImageModal()
     {
@@ -106,6 +138,7 @@
     
     private async Task Logout()
     {
+        showUserMenu = false;
         // Track logout time before clearing session
         var employeeIdStr = await sessionStorage.GetItemAsync<string>("employeeId");
         if (!string.IsNullOrEmpty(employeeIdStr) && int.TryParse(employeeIdStr, out var employeeId))
@@ -145,7 +178,30 @@
         if (showMenu)
         {
             showMenu = false;
-            StateHasChanged();
         }
+        if (showUserMenu)
+        {
+            showUserMenu = false;
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleUserMenu()
+    {
+        showUserMenu = !showUserMenu;
+        StateHasChanged();
+    }
+
+    private void NavigateToProfile()
+    {
+        showUserMenu = false;
+        navigation.NavigateTo("/profile");
+        StateHasChanged();
+    }
+
+    private void CloseUserMenu()
+    {
+        showUserMenu = false;
+        StateHasChanged();
     }
 }

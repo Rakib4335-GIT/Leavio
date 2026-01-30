@@ -64,7 +64,9 @@ namespace Leavio.PanelService
                 {
                     var existingUserId = await context.AdminInfos
                         .AsNoTracking()
-                        .FirstOrDefaultAsync(x => x.UserId == registrationModel.UserId);
+                        .Where(x => x.UserId == registrationModel.UserId)
+                        .Select(x => new { x.Id, x.UserId })
+                        .FirstOrDefaultAsync();
                     if (existingUserId != null)
                     {
                         return new ResponseModel
@@ -77,7 +79,9 @@ namespace Leavio.PanelService
 
                 var existingAdmin = await context.AdminInfos
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Email == registrationModel.Email);
+                    .Where(x => x.Email == registrationModel.Email)
+                    .Select(x => new { x.Id, x.Email })
+                    .FirstOrDefaultAsync();
                 if (existingAdmin != null)
                 {
                     return new ResponseModel
@@ -108,7 +112,9 @@ namespace Leavio.PanelService
                     UserId = registrationModel.UserId,
                     Name = registrationModel.Name,
                     Email = registrationModel.Email,
-                    Password = registrationModel.Password
+                    Password = registrationModel.Password,
+                    PhoneNumber = null, // Optional field - may not exist in DB
+                    ProfilePicture = null // Optional field - may not exist in DB
                     // RoleId is optional - we use User_Role table instead
                 };
                 
@@ -243,11 +249,36 @@ namespace Leavio.PanelService
                 
                 // Use ToLower() for case-insensitive comparison (works with SQL Server and most databases)
                 var loginInputLower = loginInput.ToLower();
-                var user = await context.AdminInfos
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => 
-                        (!string.IsNullOrEmpty(x.Email) && x.Email.ToLower() == loginInputLower) ||
-                        (!string.IsNullOrEmpty(x.UserId) && x.UserId.ToLower() == loginInputLower));
+                
+                // Try to get user - handle optional columns gracefully
+                AdminInfo? user = null;
+                try
+                {
+                    // First try with all columns (if they exist)
+                    user = await context.AdminInfos
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => 
+                            (!string.IsNullOrEmpty(x.Email) && x.Email.ToLower() == loginInputLower) ||
+                            (!string.IsNullOrEmpty(x.UserId) && x.UserId.ToLower() == loginInputLower));
+                }
+                catch
+                {
+                    // If optional columns don't exist, use explicit selection
+                    user = await context.AdminInfos
+                        .AsNoTracking()
+                        .Where(x => 
+                            (!string.IsNullOrEmpty(x.Email) && x.Email.ToLower() == loginInputLower) ||
+                            (!string.IsNullOrEmpty(x.UserId) && x.UserId.ToLower() == loginInputLower))
+                        .Select(x => new AdminInfo
+                        {
+                            Id = x.Id,
+                            UserId = x.UserId,
+                            Name = x.Name,
+                            Email = x.Email,
+                            Password = x.Password
+                        })
+                        .FirstOrDefaultAsync();
+                }
                     
                 if (user == null)
                 {
@@ -569,14 +600,45 @@ namespace Leavio.PanelService
             try
             {
                 using var context = await _contextFactory.CreateDbContextAsync();
+                // Use raw SQL or handle optional columns gracefully
                 return await context.AdminInfos
                     .AsNoTracking()
                     .OrderBy(u => u.Name)
+                    .Select(u => new AdminInfo
+                    {
+                        Id = u.Id,
+                        UserId = u.UserId,
+                        Name = u.Name,
+                        Email = u.Email,
+                        Password = u.Password,
+                        PhoneNumber = u.PhoneNumber,
+                        ProfilePicture = u.ProfilePicture
+                    })
                     .ToListAsync();
             }
             catch (Exception)
             {
-                return new List<AdminInfo>();
+                // If columns don't exist, try without optional fields
+                try
+                {
+                    using var context = await _contextFactory.CreateDbContextAsync();
+                    return await context.AdminInfos
+                        .AsNoTracking()
+                        .OrderBy(u => u.Name)
+                        .Select(u => new AdminInfo
+                        {
+                            Id = u.Id,
+                            UserId = u.UserId,
+                            Name = u.Name,
+                            Email = u.Email,
+                            Password = u.Password
+                        })
+                        .ToListAsync();
+                }
+                catch
+                {
+                    return new List<AdminInfo>();
+                }
             }
         }
 
@@ -707,6 +769,118 @@ namespace Leavio.PanelService
                 {
                     Success = true,
                     Message = $"Registration has been {(enabled ? "enabled" : "disabled")}."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
+        public async Task<ResponseModel> UpdateProfileAsync(string userId, string name, string email, string? phoneNumber = null)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                // Find user by UserId
+                var user = await context.AdminInfos.FirstOrDefaultAsync(u => u.UserId == userId);
+                if (user == null)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "User not found."
+                    };
+                }
+
+                // Validate name
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Name cannot be empty."
+                    };
+                }
+
+                if (name.Length > 100)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Name is too long (maximum 100 characters)."
+                    };
+                }
+
+                // Update user information
+                user.Name = name;
+                user.PhoneNumber = phoneNumber;
+
+                await context.SaveChangesAsync();
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = "Profile updated successfully."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
+        public async Task<ResponseModel> UpdateProfilePictureAsync(string userId, string profilePicturePath)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                // Find user by UserId
+                var user = await context.AdminInfos.FirstOrDefaultAsync(u => u.UserId == userId);
+                if (user == null)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "User not found."
+                    };
+                }
+
+                // Delete old profile picture if exists
+                if (!string.IsNullOrEmpty(user.ProfilePicture))
+                {
+                    var oldPicturePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.ProfilePicture.TrimStart('/'));
+                    if (File.Exists(oldPicturePath))
+                    {
+                        try
+                        {
+                            File.Delete(oldPicturePath);
+                        }
+                        catch
+                        {
+                            // Ignore errors when deleting old picture
+                        }
+                    }
+                }
+
+                // Update profile picture path
+                user.ProfilePicture = profilePicturePath;
+                await context.SaveChangesAsync();
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = "Profile picture updated successfully."
                 };
             }
             catch (Exception ex)

@@ -9,10 +9,11 @@
 @using QuestPDF.Infrastructure
 @inject AdminPanelService adminPanelService
 @inject IJSRuntime JSRuntime
+@implements IDisposable
 
 <PageTitle>Login Tracking</PageTitle>
 
-<div class="login-tracking-container">
+<div class="login-tracking-container" @onclick="HandlePageClick">
     <div class="page-header">
         <h1>Daily Login Tracking</h1>
         <p class="subtitle">View user login and logout times</p>
@@ -60,8 +61,39 @@
     <div class="filters-section">
         <div class="filter-group">
             <label for="employeeIdFilter">Employee ID:</label>
-            <input type="text" id="employeeIdFilter" @bind="employeeIdFilter" @bind:event="oninput" 
-                   placeholder="Filter by Employee ID" class="form-control" />
+            <div class="employee-dropdown-container" @onclick:stopPropagation="true">
+                <div class="employee-dropdown-trigger" @onclick="ToggleEmployeeDropdown">
+                    <input type="text" 
+                           id="employeeIdFilter" 
+                           @bind="employeeSearchText" 
+                           @bind:event="oninput"
+                           @onfocus="OnEmployeeSearchFocus"
+                           placeholder="Search Employee ID or Name..." 
+                           class="form-control employee-search-input" />
+                    <svg class="dropdown-chevron @(showEmployeeDropdown ? "open" : "")" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+                @if (showEmployeeDropdown)
+                {
+                    <div class="employee-dropdown-menu">
+                        @if (filteredEmployees.Any())
+                        {
+                            @foreach (var employee in filteredEmployees)
+                            {
+                                <div class="employee-dropdown-item @(selectedEmployeeId == employee.Id ? "selected" : "")" 
+                                     @onclick="() => SelectEmployee(employee)">
+                                    <div class="employee-item-id">@(employee.UserId ?? employee.Id.ToString())</div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="employee-dropdown-item no-results">No employees found</div>
+                        }
+                    </div>
+                }
+            </div>
         </div>
 
         <div class="filter-group">
@@ -174,7 +206,7 @@
                         var serialNumber = (currentPage - 1) * pageSize + item.index + 1;
                         <tr>
                             <td>@serialNumber</td>
-                            <td>@item.record.EmployeeId</td>
+                            <td>@(item.record.Employee?.UserId ?? item.record.EmployeeId.ToString())</td>
                             <td>@(item.record.Employee?.Name ?? "N/A")</td>
                             <td>@(item.record.Employee?.Email ?? "N/A")</td>
                             <td>@item.record.TrackingDate.ToString("yyyy-MM-dd")</td>
@@ -258,8 +290,14 @@
     private bool isLoading = false;
     private string errorMessage = string.Empty;
     private string employeeIdFilter = string.Empty;
+    private string employeeSearchText = string.Empty;
     private DateTime? startDateFilter;
     private DateTime? endDateFilter;
+    
+    // Employee dropdown
+    private List<AdminInfo> allEmployees = new();
+    private bool showEmployeeDropdown = false;
+    private int? selectedEmployeeId = null;
     
     // Report generation properties
     private string reportType = "Excel";
@@ -289,8 +327,8 @@
             {
                 case "EmployeeId":
                     sorted = sortDirection == "asc" 
-                        ? sorted.OrderBy(x => x.EmployeeId)
-                        : sorted.OrderByDescending(x => x.EmployeeId);
+                        ? sorted.OrderBy(x => x.Employee?.UserId ?? x.EmployeeId.ToString())
+                        : sorted.OrderByDescending(x => x.Employee?.UserId ?? x.EmployeeId.ToString());
                     break;
                 case "Name":
                     sorted = sortDirection == "asc"
@@ -330,7 +368,58 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadEmployees();
         await LoadData();
+    }
+    
+    private async Task LoadEmployees()
+    {
+        try
+        {
+            allEmployees = await adminPanelService.GetAllUsersAsync();
+        }
+        catch (Exception)
+        {
+            allEmployees = new List<AdminInfo>();
+        }
+    }
+    
+    private IEnumerable<AdminInfo> filteredEmployees
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(employeeSearchText))
+            {
+                return allEmployees;
+            }
+            
+            var searchLower = employeeSearchText.ToLower();
+            return allEmployees.Where(e => 
+                (e.UserId != null && e.UserId.ToLower().Contains(searchLower)) ||
+                (e.Name != null && e.Name.ToLower().Contains(searchLower)) ||
+                (e.Email != null && e.Email.ToLower().Contains(searchLower)) ||
+                e.Id.ToString().Contains(searchLower)
+            );
+        }
+    }
+    
+    private void ToggleEmployeeDropdown()
+    {
+        showEmployeeDropdown = !showEmployeeDropdown;
+    }
+    
+    private void OnEmployeeSearchFocus()
+    {
+        showEmployeeDropdown = true;
+    }
+    
+    private void SelectEmployee(AdminInfo employee)
+    {
+        selectedEmployeeId = employee.Id;
+        employeeIdFilter = employee.Id.ToString();
+        employeeSearchText = employee.UserId ?? employee.Id.ToString();
+        showEmployeeDropdown = false;
+        StateHasChanged();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -420,6 +509,9 @@
     private async Task ClearFilters()
     {
         employeeIdFilter = string.Empty;
+        employeeSearchText = string.Empty;
+        selectedEmployeeId = null;
+        showEmployeeDropdown = false;
         startDateFilter = null;
         endDateFilter = null;
         await LoadData();
@@ -549,7 +641,8 @@
             var duration = GetDuration(record.FirstLoginTime, record.LastLogoutTime);
             
             // Escape commas and quotes in CSV
-            sb.AppendLine($"{serialNumber},{record.EmployeeId},\"{name}\",\"{email}\",{date},{firstLogin},{lastLogout},\"{duration}\"");
+            var userId = record.Employee?.UserId ?? record.EmployeeId.ToString();
+            sb.AppendLine($"{serialNumber},{userId},\"{name}\",\"{email}\",{date},{firstLogin},{lastLogout},\"{duration}\"");
             serialNumber++;
         }
         
@@ -635,7 +728,7 @@
                         table.Cell().Background(bgColor).Padding(5)
                             .Text(serialNumber.ToString());
                         table.Cell().Background(bgColor).Padding(5)
-                            .Text(record.EmployeeId.ToString());
+                            .Text(record.Employee?.UserId ?? record.EmployeeId.ToString());
                         table.Cell().Background(bgColor).Padding(5)
                             .Text(record.Employee?.Name ?? "N/A");
                         table.Cell().Background(bgColor).Padding(5)
@@ -720,9 +813,10 @@
         int serialNumber = 1;
         foreach (var record in sortedLoginTrackingData)
         {
+            var userId = record.Employee?.UserId ?? record.EmployeeId.ToString();
             sb.AppendLine("<tr>");
             sb.AppendLine($"<td>{serialNumber}</td>");
-            sb.AppendLine($"<td>{record.EmployeeId}</td>");
+            sb.AppendLine($"<td>{EscapeHtml(userId)}</td>");
             sb.AppendLine($"<td>{EscapeHtml(record.Employee?.Name ?? "N/A")}</td>");
             sb.AppendLine($"<td>{EscapeHtml(record.Employee?.Email ?? "N/A")}</td>");
             sb.AppendLine($"<td>{record.TrackingDate:yyyy-MM-dd}</td>");
@@ -880,5 +974,19 @@
         // Reset to first page when sorting changes
         currentPage = 1;
         StateHasChanged();
+    }
+    
+    private void HandlePageClick()
+    {
+        if (showEmployeeDropdown)
+        {
+            showEmployeeDropdown = false;
+            StateHasChanged();
+        }
+    }
+    
+    public void Dispose()
+    {
+        // Cleanup if needed
     }
 }

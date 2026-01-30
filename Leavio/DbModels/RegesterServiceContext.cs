@@ -23,7 +23,7 @@ public partial class RegesterServiceContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=192.168.10.202;Database=Regester_Service;User Id=sa;Password=123456;TrustServerCertificate=True;");
+        => optionsBuilder.UseSqlServer("Server=192.168.10.202;Database=Leavio;User Id=sa;Password=123456;TrustServerCertificate=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +37,10 @@ public partial class RegesterServiceContext : DbContext
             entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.Password).HasMaxLength(255);
+            
+            // Optional fields - may not exist in database yet
+            entity.Property(e => e.PhoneNumber).HasMaxLength(20);
+            entity.Property(e => e.ProfilePicture).HasMaxLength(500);
         });
 
         modelBuilder.Entity<Role>(entity =>
