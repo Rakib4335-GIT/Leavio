@@ -89,6 +89,34 @@
     color: #999;
 }
 
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    transition: color 0.3s ease;
+    z-index: 2;
+}
+
+.password-toggle:hover:not(:disabled) {
+    color: #667eea;
+}
+
+.password-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.password-wrapper input {
+    padding-right: 45px;
+}
+
 .input-wrapper input.input-invalid {
     border-bottom-color: #dc3545;
 }

@@ -14,43 +14,57 @@
         
         <form @onsubmit="HandleLogin" @onsubmit:preventDefault="true" class="login-form">
             <div class="input-group">
-                <label for="email">Email</label>
+                <label for="email">User Name or Email</label>
                 <div class="input-wrapper">
                     <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                         <circle cx="12" cy="7" r="4"></circle>
                     </svg>
-                    <input type="email" id="email" @bind="loginModel.EmailId" placeholder="Type your email" required disabled="@isProcessing" />
+                    <input type="text" id="email" @bind="loginModel.EmailId" placeholder="Enter User Name or Email" required disabled="@isProcessing" />
                 </div>
             </div>
 
             <div class="input-group">
                 <label for="password">Password</label>
-                <div class="input-wrapper">
+                <div class="input-wrapper password-wrapper">
                     <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                     </svg>
-                    <input type="password" id="password" @bind="loginModel.Password" placeholder="Type your password" required disabled="@isProcessing" />
+                    <input type="@(showPassword ? "text" : "password")" id="password" @bind="loginModel.Password" placeholder="Type your password" required disabled="@isProcessing" />
+                    <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility" disabled="@isProcessing" title="@(showPassword ? "Hide password" : "Show password")">
+                        @if (showPassword)
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        }
+                    </button>
                 </div>
             </div>
 
+            @* CAPTCHA Section - Commented Out
             <div class="input-group">
                 <label for="captcha">CAPTCHA</label>
                 <div class="captcha-container">
                     <div class="captcha-display">
                         <div class="captcha-image" @ref="captchaContainer" style="@GetCaptchaBackgroundStyle()">
-                            @* Background noise dots *@
                             @foreach (var dot in captchaDots)
                             {
                                 <div class="captcha-dot" style="@dot"></div>
                             }
-                            @* Noise lines *@
                             @foreach (var line in captchaLines)
                             {
                                 <div class="captcha-line" style="@line"></div>
                             }
-                            @* CAPTCHA characters *@
                             @for (int i = 0; i < captchaText.Length; i++)
                             {
                                 var charIndex = i;
@@ -79,6 +93,7 @@
                     }
                 </div>
             </div>
+            *@
 
             <div class="forgot-password">
                 <a href="#" class="forgot-link">Forgot password?</a>
@@ -139,6 +154,7 @@
     private string alertMessage = string.Empty;
     private bool isProcessing = false;
     private bool isSuccess = false;
+    private bool showPassword = false;
     
     // CAPTCHA variables
     private Random random = new Random();
@@ -152,7 +168,7 @@
 
     protected override void OnInitialized()
     {
-        GenerateCaptcha();
+        // GenerateCaptcha(); // CAPTCHA commented out
     }
 
     private void GenerateCaptcha()
@@ -244,16 +260,21 @@
         return false;
     }
 
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
     private async Task HandleLogin()
     {
         if (isProcessing) return;
 
-        // Validate CAPTCHA first
-        if (!ValidateCaptcha())
-        {
-            GenerateCaptcha(); // Generate new CAPTCHA on error
-            return;
-        }
+        // CAPTCHA validation commented out
+        // if (!ValidateCaptcha())
+        // {
+        //     GenerateCaptcha(); // Generate new CAPTCHA on error
+        //     return;
+        // }
 
         isProcessing = true;
         alertMessage = string.Empty;
@@ -269,9 +290,25 @@
                 // Parse the message: "Login Successful! User ID: {id} | Name: {name} | Email: {email} | Role: {role}"
                 var parts = response.Message.Split("|");
                 
-                if (parts.Length >= 4)
+                if (parts.Length >= 5)
                 {
                     // Extract values after colons
+                    var idPart = parts[0].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var namePart = parts[1].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var emailPart = parts[2].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var rolePart = parts[3].Split(':').LastOrDefault()?.Trim() ?? "";
+                    var employeeIdPart = parts[4].Split(':').LastOrDefault()?.Trim() ?? "";
+
+                    await sessionStorage.SetItemAsync("adminId", idPart);
+                    await sessionStorage.SetItemAsync("adminName", namePart);
+                    await sessionStorage.SetItemAsync("adminEmail", emailPart);
+                    await sessionStorage.SetItemAsync("adminRole", rolePart);
+                    // EmployeeId is now the same as adminId (both are AdminInfo.Id)
+                    await sessionStorage.SetItemAsync("employeeId", idPart);
+                }
+                else if (parts.Length >= 4)
+                {
+                    // Fallback for old message format (should not happen with updated Login method)
                     var idPart = parts[0].Split(':').LastOrDefault()?.Trim() ?? "";
                     var namePart = parts[1].Split(':').LastOrDefault()?.Trim() ?? "";
                     var emailPart = parts[2].Split(':').LastOrDefault()?.Trim() ?? "";
@@ -281,6 +318,8 @@
                     await sessionStorage.SetItemAsync("adminName", namePart);
                     await sessionStorage.SetItemAsync("adminEmail", emailPart);
                     await sessionStorage.SetItemAsync("adminRole", rolePart);
+                    // EmployeeId is now the same as adminId (both are AdminInfo.Id)
+                    await sessionStorage.SetItemAsync("employeeId", idPart);
                 }
 
                 navigation.NavigateTo("/", forceLoad: true);
@@ -289,14 +328,14 @@
             {
                 alertMessage = response.Message;
                 isSuccess = false;
-                GenerateCaptcha(); // Generate new CAPTCHA on login failure
+                // GenerateCaptcha(); // CAPTCHA commented out
             }
         }
         catch (Exception ex)
         {
             alertMessage = $"An error occurred: {ex.Message}";
             isSuccess = false;
-            GenerateCaptcha(); // Generate new CAPTCHA on error
+            // GenerateCaptcha(); // CAPTCHA commented out
         }
         finally
         {

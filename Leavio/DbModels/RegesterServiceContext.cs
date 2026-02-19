@@ -19,6 +19,7 @@ public partial class RegesterServiceContext : DbContext
     public virtual DbSet<Role> Roles { get; set; }
     public virtual DbSet<UserRole> UserRoles { get; set; }
     public virtual DbSet<SystemSettings> SystemSettings { get; set; }
+    public virtual DbSet<DailyLoginTracking> DailyLoginTrackings { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -95,6 +96,33 @@ public partial class RegesterServiceContext : DbContext
             entity.HasIndex(e => e.SettingKey)
                 .IsUnique()
                 .HasDatabaseName("IX_SystemSettings_SettingKey");
+        });
+
+        modelBuilder.Entity<DailyLoginTracking>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__DailyLoginTracking__3214EC07");
+
+            entity.ToTable("DailyLoginTracking");
+
+            entity.Property(e => e.EmployeeId)
+                .IsRequired();
+
+            entity.Property(e => e.FirstLoginTime)
+                .IsRequired();
+
+            entity.Property(e => e.TrackingDate)
+                .IsRequired();
+
+            // Configure foreign key relationship to AdminInfo
+            entity.HasOne(d => d.Employee)
+                .WithMany()
+                .HasForeignKey(d => d.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_DailyLoginTracking_AdminInfo");
+
+            // Create index on EmployeeId and TrackingDate for efficient queries
+            entity.HasIndex(e => new { e.EmployeeId, e.TrackingDate })
+                .HasDatabaseName("IX_DailyLoginTracking_EmployeeId_TrackingDate");
         });
 
         OnModelCreatingPartial(modelBuilder);

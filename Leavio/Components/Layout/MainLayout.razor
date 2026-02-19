@@ -1,5 +1,7 @@
 ﻿@using Blazored.SessionStorage
+@using Leavio.PanelService
 @inject ISessionStorageService sessionStorage
+@inject AdminPanelService adminPanelService
 @inherits LayoutComponentBase
 @inject NavigationManager navigation
 
@@ -27,6 +29,7 @@
                         <div class="menu-dropdown-content">
                             <a href="/role-management" class="menu-button" @onclick="CloseMenu">ROLE MANAGEMENT</a>
                             <a href="/user-role-management" class="menu-button" @onclick="CloseMenu">USER ROLES</a>
+                            <a href="/login-tracking" class="menu-button" @onclick="CloseMenu">LOGIN TRACKING</a>
                         </div>
                     }
                 </div>
@@ -103,6 +106,13 @@
     
     private async Task Logout()
     {
+        // Track logout time before clearing session
+        var employeeIdStr = await sessionStorage.GetItemAsync<string>("employeeId");
+        if (!string.IsNullOrEmpty(employeeIdStr) && int.TryParse(employeeIdStr, out var employeeId))
+        {
+            await adminPanelService.TrackLogoutAsync(employeeId);
+        }
+
         await sessionStorage.ClearAsync();
         isLoggedIn = false;
         userName = string.Empty;
