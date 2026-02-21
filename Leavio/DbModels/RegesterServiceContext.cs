@@ -20,6 +20,7 @@ public partial class RegesterServiceContext : DbContext
     public virtual DbSet<UserRole> UserRoles { get; set; }
     public virtual DbSet<SystemSettings> SystemSettings { get; set; }
     public virtual DbSet<DailyLoginTracking> DailyLoginTrackings { get; set; }
+    public virtual DbSet<MenuItem> MenuItems { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -127,6 +128,57 @@ public partial class RegesterServiceContext : DbContext
             // Create index on EmployeeId and TrackingDate for efficient queries
             entity.HasIndex(e => new { e.EmployeeId, e.TrackingDate })
                 .HasDatabaseName("IX_DailyLoginTracking_EmployeeId_TrackingDate");
+        });
+
+        modelBuilder.Entity<MenuItem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__MenuItem__3214EC07");
+
+            entity.ToTable("MenuItem");
+
+            entity.Property(e => e.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.Url)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(e => e.Icon)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.Status)
+                .IsRequired()
+                .HasDefaultValue(true);
+
+            entity.Property(e => e.DisplayOrder)
+                .IsRequired()
+                .HasDefaultValue(0);
+
+            entity.Property(e => e.CreatedDate)
+                .IsRequired();
+
+            entity.Property(e => e.ParentId)
+                .IsRequired(false);
+
+            entity.Property(e => e.RequiresAuthentication)
+                .IsRequired()
+                .HasDefaultValue(false);
+
+            // Configure self-referencing relationship for parent-child menu items
+            entity.HasOne(d => d.Parent)
+                .WithMany(p => p.Children)
+                .HasForeignKey(d => d.ParentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_MenuItem_Parent");
+
+            // Create index on Status and DisplayOrder for efficient queries
+            entity.HasIndex(e => new { e.Status, e.DisplayOrder })
+                .HasDatabaseName("IX_MenuItem_Status_DisplayOrder");
+
+            // Create index on ParentId for efficient queries
+            entity.HasIndex(e => e.ParentId)
+                .HasDatabaseName("IX_MenuItem_ParentId");
         });
 
         OnModelCreatingPartial(modelBuilder);

@@ -1,5 +1,6 @@
 ﻿@using Blazored.SessionStorage
 @using Leavio.PanelService
+@using Leavio.DbModels
 @inject ISessionStorageService sessionStorage
 @inject AdminPanelService adminPanelService
 @inherits LayoutComponentBase
@@ -14,25 +15,46 @@
         </div>
 
         <div class="nav-links">
-            <a href="/">Home</a>
-            <a href="/aboutUs">About Us</a>
-            <a href="/contact">Contact</a>
-            @if (isLoggedIn && isAdmin)
+            @foreach (var menuItem in activeMenuItems)
             {
-                <div class="menu-dropdown" @onclick:stopPropagation="true">
-                    <button class="menu-trigger" @onclick="ToggleMenu">
-                        <span>Admin Menu</span>
-                        <span class="menu-arrow @(showMenu ? "open" : "")">▼</span>
-                    </button>
-                    @if (showMenu)
-                    {
-                        <div class="menu-dropdown-content">
-                            <a href="/role-management" class="menu-button" @onclick="CloseMenu">ROLE MANAGEMENT</a>
-                            <a href="/user-role-management" class="menu-button" @onclick="CloseMenu">USER ROLES</a>
-                            <a href="/login-tracking" class="menu-button" @onclick="CloseMenu">LOGIN TRACKING</a>
-                        </div>
-                    }
-                </div>
+                @if (menuItem.Children != null && menuItem.Children.Any())
+                {
+                    <div class="menu-dropdown" @onclick:stopPropagation="true">
+                        <button class="menu-trigger" @onclick="() => ToggleSubMenu(menuItem.Id)">
+                            @if (!string.IsNullOrEmpty(menuItem.Icon))
+                            {
+                                <span class="menu-icon">@menuItem.Icon</span>
+                            }
+                            <span>@menuItem.Name</span>
+                            <span class="menu-arrow @(openSubMenus.Contains(menuItem.Id) ? "open" : "")">▼</span>
+                        </button>
+                        @if (openSubMenus.Contains(menuItem.Id))
+                        {
+                            <div class="menu-dropdown-content">
+                                @foreach (var child in menuItem.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name))
+                                {
+                                    <a href="@child.Url" class="menu-button" @onclick="() => CloseSubMenu(menuItem.Id)">
+                                        @if (!string.IsNullOrEmpty(child.Icon))
+                                        {
+                                            <span class="menu-icon">@child.Icon</span>
+                                        }
+                                        <span>@child.Name</span>
+                                    </a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <a href="@menuItem.Url">
+                        @if (!string.IsNullOrEmpty(menuItem.Icon))
+                        {
+                            <span class="menu-icon">@menuItem.Icon</span>
+                        }
+                        <span>@menuItem.Name</span>
+                    </a>
+                }
             }
         </div>
 
@@ -113,6 +135,8 @@
     private bool showImageModal = false;
     private bool showMenu = false;
     private bool showUserMenu = false;
+    private List<MenuItem> activeMenuItems = new();
+    private HashSet<int> openSubMenus = new();
 
     private void ShowImageModal()
     {
@@ -131,8 +155,25 @@
                 userName = storedUserName;
                 userRole = storedUserRole ?? "User";
                 isAdmin = string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
-                StateHasChanged();
             }
+            
+            // Load menu items based on login status
+            await LoadMenuItems();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMenuItems()
+    {
+        try
+        {
+            activeMenuItems = await adminPanelService.GetActiveMenuItemsAsync(isLoggedIn);
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            // If menu loading fails, use empty list (menu will be empty)
+            activeMenuItems = new List<MenuItem>();
         }
     }
     
@@ -151,6 +192,9 @@
         userName = string.Empty;
         userRole = string.Empty;
         isAdmin = false;
+        
+        // Reload menus for non-authenticated users
+        await LoadMenuItems();
         navigation.NavigateTo("/login");
     }
 
@@ -183,6 +227,29 @@
         {
             showUserMenu = false;
         }
+        if (openSubMenus.Any())
+        {
+            openSubMenus.Clear();
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleSubMenu(int menuId)
+    {
+        if (openSubMenus.Contains(menuId))
+        {
+            openSubMenus.Remove(menuId);
+        }
+        else
+        {
+            openSubMenus.Add(menuId);
+        }
+        StateHasChanged();
+    }
+
+    private void CloseSubMenu(int menuId)
+    {
+        openSubMenus.Remove(menuId);
         StateHasChanged();
     }
 

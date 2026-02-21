@@ -1,0 +1,668 @@
+@page "/menu-management"
+@using Leavio.DbModels
+@using Leavio.PanelService
+@using Leavio.Models
+@using Microsoft.EntityFrameworkCore
+@using Blazored.SessionStorage
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+
+@inject AdminPanelService adminPanelService
+@inject IDbContextFactory<RegesterServiceContext> contextFactory
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Menu Management</PageTitle>
+
+@if (isCheckingAuth)
+{
+    <div class="loading-message">
+        <div class="spinner"></div>
+        <p>Checking authorization...</p>
+    </div>
+}
+else if (!isAuthorized)
+{
+    <div class="unauthorized-message">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page. Admin role required.</p>
+        <a href="/">Return to Home</a>
+    </div>
+}
+else
+{
+<div class="menu-management-page">
+    <div class="menu-management-card">
+        <h1 class="page-title">Menu Management</h1>
+
+        <div class="add-menu-section">
+            <h2>@(editingMenuItem != null ? "Edit Menu Item" : "Add New Menu Item")</h2>
+            <form @onsubmit="HandleSaveMenuItem" @onsubmit:preventDefault="true" class="menu-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="menuName">Name *</label>
+                        <input type="text" id="menuName" @bind="menuName" placeholder="Enter menu name" required disabled="@isProcessing" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label for="menuUrl">URL *</label>
+                        <input type="text" id="menuUrl" @bind="menuUrl" placeholder="Enter URL (e.g., /home)" required disabled="@isProcessing" class="form-control" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="menuIcon">Icon (Optional)</label>
+                        <input type="text" id="menuIcon" @bind="menuIcon" placeholder="Enter icon class or SVG path" disabled="@isProcessing" class="form-control" />
+                        <small class="form-hint">e.g., "fa fa-home" or SVG path</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="displayOrder">Display Order</label>
+                        <input type="number" id="displayOrder" @bind="displayOrder" min="0" disabled="@isProcessing" class="form-control" />
+                        <small class="form-hint">Lower numbers appear first</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="parentMenu">Parent Menu (Optional)</label>
+                    <select id="parentMenu" @bind="selectedParentId" disabled="@isProcessing" class="form-control">
+                        <option value="0">-- None (Top Level) --</option>
+                        @foreach (var parent in parentMenuItems)
+                        {
+                            <option value="@parent.Id">@parent.Name</option>
+                        }
+                    </select>
+                    <small class="form-hint">Select a parent menu to create a submenu</small>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="menuStatus" disabled="@isProcessing" />
+                            <span>Active (Status)</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="showWithoutLogin" disabled="@isProcessing" />
+                            <span>Show Without Login</span>
+                        </label>
+                        <small class="form-hint">Check if this menu should be visible to everyone (including non-logged-in users)</small>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-save-menu" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <text>@(editingMenuItem != null ? "Updating..." : "Adding...")</text>
+                        }
+                        else
+                        {
+                            <text>@(editingMenuItem != null ? "Update Menu Item" : "Add Menu Item")</text>
+                        }
+                    </button>
+                    @if (editingMenuItem != null)
+                    {
+                        <button type="button" @onclick="CancelEdit" class="btn-cancel" disabled="@isProcessing">Cancel</button>
+                    }
+                </div>
+            </form>
+        </div>
+
+        @if (!string.IsNullOrEmpty(alertMessage))
+        {
+            <div class="alert-message @(isSuccess ? "alert-success" : "alert-error")">
+                @alertMessage
+            </div>
+        }
+
+        <div class="menu-list-section">
+            <h2>Menu Items</h2>
+            @if (menuItems.Any())
+            {
+                <div class="table-container">
+                    <table class="menu-table">
+                        <thead>
+                            <tr>
+                                <th>SL No.</th>
+                                <th class="sortable" @onclick='() => SortByColumn("Name")'>
+                                    Name
+                                    @if (sortColumn == "Name")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th>URL</th>
+                                <th>Icon</th>
+                                <th>Parent</th>
+                                <th class="sortable" @onclick='() => SortByColumn("DisplayOrder")'>
+                                    Order
+                                    @if (sortColumn == "DisplayOrder")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th class="sortable" @onclick='() => SortByColumn("Status")'>
+                                    Status
+                                    @if (sortColumn == "Status")
+                                    {
+                                        <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                                    }
+                                </th>
+                                <th>Show Without Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in paginatedMenuItems.Select((menu, index) => new { menu, index }))
+                            {
+                                var serialNumber = (currentPage - 1) * pageSize + item.index + 1;
+                                var indentLevel = GetIndentLevel(item.menu);
+                                <tr class="@(item.menu.ParentId.HasValue ? "child-menu-item" : "")">
+                                    <td>@serialNumber</td>
+                                    <td>
+                                        <span class="menu-name" style="padding-left: @(indentLevel * 20)px;">
+                                            @if (item.menu.ParentId.HasValue)
+                                            {
+                                                <span class="menu-indicator">└─</span>
+                                            }
+                                            @item.menu.Name
+                                        </span>
+                                    </td>
+                                    <td>@item.menu.Url</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(item.menu.Icon))
+                                        {
+                                            <span class="icon-preview">@item.menu.Icon</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-icon">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (item.menu.Parent != null)
+                                        {
+                                            <span class="parent-name">@item.menu.Parent.Name</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="no-parent">—</span>
+                                        }
+                                    </td>
+                                    <td>@item.menu.DisplayOrder</td>
+                                    <td>
+                                        <span class="status-badge @(item.menu.Status ? "status-active" : "status-inactive")">
+                                            @(item.menu.Status ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="status-badge @(!item.menu.RequiresAuthentication ? "status-active" : "status-inactive")">
+                                            @(!item.menu.RequiresAuthentication ? "Yes" : "No")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="action-buttons">
+                                            <button @onclick="async () => await EditMenuItem(item.menu)" class="btn-edit" disabled="@isProcessing" title="Edit">Edit</button>
+                                            <button @onclick="() => DeleteMenuItem(item.menu.Id)" class="btn-delete" disabled="@isProcessing" title="Delete">Delete</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Controls -->
+                @if (totalPages > 0)
+                {
+                    <div class="pagination-container">
+                        <div class="pagination-info">
+                            Showing @((currentPage - 1) * pageSize + 1) to @(Math.Min(currentPage * pageSize, totalRecords)) of @totalRecords entries
+                        </div>
+                        <div class="pagination-controls">
+                            <button @onclick="GoToFirstPage" class="pagination-btn" disabled="@(currentPage == 1 || isProcessing)" title="First Page">
+                                &laquo;&laquo;
+                            </button>
+                            <button @onclick="GoToPreviousPage" class="pagination-btn" disabled="@(currentPage == 1 || isProcessing)" title="Previous">
+                                &laquo;
+                            </button>
+                            
+                            @for (int i = startPage; i <= endPage; i++)
+                            {
+                                var pageNum = i;
+                                <button @onclick="() => GoToPage(pageNum)" class="pagination-btn @(currentPage == pageNum ? "active" : "")" disabled="@isProcessing">
+                                    @pageNum
+                                </button>
+                            }
+                            
+                            <button @onclick="GoToNextPage" class="pagination-btn" disabled="@(currentPage == totalPages || isProcessing)" title="Next">
+                                &raquo;
+                            </button>
+                            <button @onclick="GoToLastPage" class="pagination-btn" disabled="@(currentPage == totalPages || isProcessing)" title="Last Page">
+                                &raquo;&raquo;
+                            </button>
+                        </div>
+                        <div class="pagination-page-size">
+                            <label for="pageSizeSelect">Items per page:</label>
+                            <select id="pageSizeSelect" @bind="pageSize" @bind:after="OnPageSizeChanged" class="page-size-select" disabled="@isProcessing">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="no-menu-items">No menu items found. Please add a menu item above.</p>
+            }
+        </div>
+
+        <div class="back-link">
+            <a href="/">Back to Home</a>
+        </div>
+    </div>
+</div>
+}
+
+@code {
+    private List<MenuItem> menuItems = new();
+    private List<MenuItem> parentMenuItems = new();
+    private MenuItem? editingMenuItem = null;
+    private string menuName = string.Empty;
+    private string menuUrl = string.Empty;
+    private string? menuIcon = null;
+    private bool menuStatus = true;
+    private bool showWithoutLogin = false; // Inverted: true = show without login (public), false = requires login. Default: unchecked (requires login)
+    private int displayOrder = 0;
+    private int selectedParentId = 0;
+    private string alertMessage = string.Empty;
+    private bool isProcessing = false;
+    private bool isSuccess = false;
+    private bool isAuthorized = false;
+    private bool isCheckingAuth = true;
+    
+    // Pagination variables
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private string sortColumn = "DisplayOrder";
+    private string sortDirection = "asc";
+    private int totalPages => (int)Math.Ceiling((double)sortedMenuItems.Count() / pageSize);
+    private int totalRecords => sortedMenuItems.Count();
+    private int startPage => Math.Max(1, currentPage - 2);
+    private int endPage => Math.Min(totalPages, currentPage + 2);
+    
+    // Sorted data
+    private IEnumerable<MenuItem> sortedMenuItems
+    {
+        get
+        {
+            if (menuItems == null || !menuItems.Any())
+                return Enumerable.Empty<MenuItem>();
+            
+            var sorted = menuItems.AsEnumerable();
+            
+            switch (sortColumn)
+            {
+                case "Name":
+                    sorted = sortDirection == "asc" 
+                        ? sorted.OrderBy(x => x.Name ?? "")
+                        : sorted.OrderByDescending(x => x.Name ?? "");
+                    break;
+                case "DisplayOrder":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.DisplayOrder)
+                        : sorted.OrderByDescending(x => x.DisplayOrder);
+                    break;
+                case "Status":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.Status)
+                        : sorted.OrderByDescending(x => x.Status);
+                    break;
+            }
+            
+            return sorted;
+        }
+    }
+    
+    // Paginated data
+    private IEnumerable<MenuItem> paginatedMenuItems => sortedMenuItems
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CheckAuthorization();
+            if (isAuthorized)
+            {
+                await LoadMenuItems();
+                await LoadParentMenuItems();
+            }
+            isCheckingAuth = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CheckAuthorization()
+    {
+        var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
+        if (string.IsNullOrEmpty(storedUserRole))
+        {
+            isCheckingAuth = false;
+            navigation.NavigateTo("/login");
+            return;
+        }
+
+        isAuthorized = string.Equals(storedUserRole, "Admin", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task LoadMenuItems()
+    {
+        try
+        {
+            menuItems = await adminPanelService.GetAllMenuItemsAsync();
+            
+            if (currentPage > totalPages && totalPages > 0)
+            {
+                currentPage = totalPages;
+            }
+            else if (totalPages == 0)
+            {
+                currentPage = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error loading menu items: {ex.Message}";
+            isSuccess = false;
+        }
+    }
+
+    private async Task LoadParentMenuItems()
+    {
+        try
+        {
+            var excludeId = editingMenuItem?.Id;
+            parentMenuItems = await adminPanelService.GetParentMenuItemsAsync(excludeId);
+        }
+        catch (Exception)
+        {
+            parentMenuItems = new List<MenuItem>();
+        }
+    }
+
+    private async Task HandleSaveMenuItem()
+    {
+        if (isProcessing) return;
+
+        // Validation
+        if (string.IsNullOrWhiteSpace(menuName))
+        {
+            alertMessage = "Menu name is required.";
+            isSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(menuUrl))
+        {
+            alertMessage = "Menu URL is required.";
+            isSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        if (menuName.Length > 100)
+        {
+            alertMessage = "Menu name cannot exceed 100 characters.";
+            isSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        if (menuUrl.Length > 500)
+        {
+            alertMessage = "Menu URL cannot exceed 500 characters.";
+            isSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            ResponseModel response;
+            
+            int? parentId = selectedParentId > 0 ? selectedParentId : null;
+            
+            if (editingMenuItem != null)
+            {
+                // Update existing menu item
+                // Invert logic: showWithoutLogin = true means RequiresAuthentication = false
+                response = await adminPanelService.UpdateMenuItemAsync(
+                    editingMenuItem.Id,
+                    menuName.Trim(),
+                    menuUrl.Trim(),
+                    menuStatus,
+                    string.IsNullOrWhiteSpace(menuIcon) ? null : menuIcon.Trim(),
+                    displayOrder,
+                    parentId,
+                    !showWithoutLogin // Inverted: if showWithoutLogin is true, RequiresAuthentication is false
+                );
+            }
+            else
+            {
+                // Create new menu item
+                // Invert logic: showWithoutLogin = true means RequiresAuthentication = false
+                response = await adminPanelService.CreateMenuItemAsync(
+                    menuName.Trim(),
+                    menuUrl.Trim(),
+                    menuStatus,
+                    string.IsNullOrWhiteSpace(menuIcon) ? null : menuIcon.Trim(),
+                    displayOrder,
+                    parentId,
+                    !showWithoutLogin // Inverted: if showWithoutLogin is true, RequiresAuthentication is false
+                );
+            }
+
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+
+            if (response.Success)
+            {
+                ResetForm();
+                await LoadMenuItems();
+                await LoadParentMenuItems();
+                if (totalPages > 0 && editingMenuItem == null)
+                {
+                    currentPage = totalPages;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error saving menu item: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task EditMenuItem(MenuItem menuItem)
+    {
+        editingMenuItem = menuItem;
+        menuName = menuItem.Name;
+        menuUrl = menuItem.Url;
+        menuIcon = menuItem.Icon;
+        menuStatus = menuItem.Status;
+        showWithoutLogin = !menuItem.RequiresAuthentication; // Inverted: if RequiresAuthentication is false, showWithoutLogin is true
+        displayOrder = menuItem.DisplayOrder;
+        selectedParentId = menuItem.ParentId ?? 0;
+        await LoadParentMenuItems(); // Reload to exclude current item from parent list
+        StateHasChanged();
+    }
+
+    private void CancelEdit()
+    {
+        ResetForm();
+        StateHasChanged();
+    }
+
+    private async Task ResetForm()
+    {
+        editingMenuItem = null;
+        menuName = string.Empty;
+        menuUrl = string.Empty;
+        menuIcon = null;
+        menuStatus = true;
+        showWithoutLogin = false; // Default: unchecked (requires login)
+        displayOrder = 0;
+        selectedParentId = 0;
+        await LoadParentMenuItems(); // Reload parent menu items
+    }
+
+    private int GetIndentLevel(MenuItem menuItem)
+    {
+        if (menuItem.ParentId == null)
+            return 0;
+        
+        // Simple indent - can be enhanced to calculate full depth
+        return 1;
+    }
+
+    private async Task DeleteMenuItem(int id)
+    {
+        if (isProcessing) return;
+
+        if (!await ConfirmDelete())
+        {
+            return;
+        }
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var response = await adminPanelService.DeleteMenuItemAsync(id);
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+
+            if (response.Success)
+            {
+                await LoadMenuItems();
+                if (currentPage > totalPages && totalPages > 0)
+                {
+                    currentPage = totalPages;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error deleting menu item: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<bool> ConfirmDelete()
+    {
+        // Simple confirmation using browser's confirm dialog
+        return await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this menu item?");
+    }
+
+    // Pagination methods
+    private void GoToPage(int page)
+    {
+        if (page >= 1 && page <= totalPages && !isProcessing)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToNextPage()
+    {
+        if (currentPage < totalPages && !isProcessing)
+        {
+            currentPage++;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToPreviousPage()
+    {
+        if (currentPage > 1 && !isProcessing)
+        {
+            currentPage--;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToFirstPage()
+    {
+        if (currentPage != 1 && !isProcessing)
+        {
+            currentPage = 1;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToLastPage()
+    {
+        if (currentPage != totalPages && totalPages > 0 && !isProcessing)
+        {
+            currentPage = totalPages;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPageSizeChanged()
+    {
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void SortByColumn(string column)
+    {
+        if (isProcessing) return;
+
+        if (sortColumn == column)
+        {
+            sortDirection = sortDirection == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            sortColumn = column;
+            sortDirection = "asc";
+        }
+
+        currentPage = 1;
+        StateHasChanged();
+    }
+}

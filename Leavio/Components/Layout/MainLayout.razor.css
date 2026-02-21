@@ -61,6 +61,11 @@
     transform: translateY(0);
 }
 
+.menu-icon {
+    margin-right: 6px;
+    display: inline-block;
+}
+
 /* Menu Dropdown Styles */
 .menu-dropdown {
     position: relative;

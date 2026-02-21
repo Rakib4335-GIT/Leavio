@@ -892,5 +892,396 @@ namespace Leavio.PanelService
                 };
             }
         }
+
+        // Menu Management Methods
+        public async Task<List<MenuItem>> GetAllMenuItemsAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                return await context.MenuItems
+                    .AsNoTracking()
+                    .Include(m => m.Parent)
+                    .Include(m => m.Children)
+                    .OrderBy(m => m.DisplayOrder)
+                    .ThenBy(m => m.Name)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<MenuItem>();
+            }
+        }
+
+        public async Task<List<MenuItem>> GetActiveMenuItemsAsync(bool isAuthenticated = false)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                // Get only top-level menu items (ParentId is null) that are active
+                // Filter by authentication requirement: if not authenticated, only show items that don't require authentication
+                var query = context.MenuItems
+                    .AsNoTracking()
+                    .Where(m => m.Status == true && m.ParentId == null);
+                
+                // Filter by authentication requirement
+                if (!isAuthenticated)
+                {
+                    query = query.Where(m => m.RequiresAuthentication == false);
+                }
+                
+                var topLevelItems = await query
+                    .OrderBy(m => m.DisplayOrder)
+                    .ThenBy(m => m.Name)
+                    .ToListAsync();
+                
+                // Load and filter children based on authentication
+                foreach (var item in topLevelItems)
+                {
+                    var childrenQuery = context.MenuItems
+                        .AsNoTracking()
+                        .Where(c => c.ParentId == item.Id && c.Status == true);
+                    
+                    if (!isAuthenticated)
+                    {
+                        childrenQuery = childrenQuery.Where(c => c.RequiresAuthentication == false);
+                    }
+                    
+                    var children = await childrenQuery
+                        .OrderBy(c => c.DisplayOrder)
+                        .ThenBy(c => c.Name)
+                        .ToListAsync();
+                    
+                    item.Children = children;
+                }
+                
+                return topLevelItems;
+            }
+            catch (Exception)
+            {
+                return new List<MenuItem>();
+            }
+        }
+
+        public async Task<List<MenuItem>> GetParentMenuItemsAsync(int? excludeId = null)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var query = context.MenuItems
+                    .AsNoTracking()
+                    .Where(m => m.ParentId == null); // Only top-level items can be parents
+                
+                if (excludeId.HasValue)
+                {
+                    query = query.Where(m => m.Id != excludeId.Value); // Exclude current item to prevent circular reference
+                }
+                
+                return await query
+                    .OrderBy(m => m.DisplayOrder)
+                    .ThenBy(m => m.Name)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<MenuItem>();
+            }
+        }
+
+        public async Task<MenuItem?> GetMenuItemByIdAsync(int id)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                return await context.MenuItems
+                    .AsNoTracking()
+                    .Include(m => m.Parent)
+                    .Include(m => m.Children)
+                    .FirstOrDefaultAsync(m => m.Id == id);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        public async Task<ResponseModel> CreateMenuItemAsync(string name, string url, bool status, string? icon, int displayOrder, int? parentId = null, bool requiresAuthentication = false)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                // Validate input
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu name is required."
+                    };
+                }
+
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu URL is required."
+                    };
+                }
+
+                if (name.Length > 100)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu name is too long (maximum 100 characters)."
+                    };
+                }
+
+                if (url.Length > 500)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu URL is too long (maximum 500 characters)."
+                    };
+                }
+
+                // Validate parent if provided
+                if (parentId.HasValue && parentId.Value > 0)
+                {
+                    var parentExists = await context.MenuItems
+                        .AsNoTracking()
+                        .AnyAsync(m => m.Id == parentId.Value);
+                    if (!parentExists)
+                    {
+                        return new ResponseModel
+                        {
+                            Success = false,
+                            Message = "Selected parent menu item does not exist."
+                        };
+                    }
+                }
+
+                var menuItem = new MenuItem
+                {
+                    Name = name.Trim(),
+                    Url = url.Trim(),
+                    Status = status,
+                    Icon = icon?.Trim(),
+                    DisplayOrder = displayOrder,
+                    ParentId = parentId > 0 ? parentId : null,
+                    RequiresAuthentication = requiresAuthentication,
+                    CreatedDate = DateTime.Now
+                };
+
+                await context.MenuItems.AddAsync(menuItem);
+                await context.SaveChangesAsync();
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = "Menu item created successfully."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
+        public async Task<ResponseModel> UpdateMenuItemAsync(int id, string name, string url, bool status, string? icon, int displayOrder, int? parentId = null, bool requiresAuthentication = false)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                var menuItem = await context.MenuItems.FirstOrDefaultAsync(m => m.Id == id);
+                if (menuItem == null)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu item not found."
+                    };
+                }
+
+                // Validate input
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu name is required."
+                    };
+                }
+
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu URL is required."
+                    };
+                }
+
+                if (name.Length > 100)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu name is too long (maximum 100 characters)."
+                    };
+                }
+
+                if (url.Length > 500)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu URL is too long (maximum 500 characters)."
+                    };
+                }
+
+                // Validate parent if provided (prevent circular reference)
+                if (parentId.HasValue && parentId.Value > 0)
+                {
+                    if (parentId.Value == id)
+                    {
+                        return new ResponseModel
+                        {
+                            Success = false,
+                            Message = "A menu item cannot be its own parent."
+                        };
+                    }
+
+                    // Check if parent exists
+                    var parentExists = await context.MenuItems
+                        .AsNoTracking()
+                        .AnyAsync(m => m.Id == parentId.Value);
+                    if (!parentExists)
+                    {
+                        return new ResponseModel
+                        {
+                            Success = false,
+                            Message = "Selected parent menu item does not exist."
+                        };
+                    }
+
+                    // Check for circular reference (prevent setting parent to a descendant)
+                    var isDescendant = await IsDescendantAsync(context, parentId.Value, id);
+                    if (isDescendant)
+                    {
+                        return new ResponseModel
+                        {
+                            Success = false,
+                            Message = "Cannot set parent: this would create a circular reference."
+                        };
+                    }
+                }
+
+                menuItem.Name = name.Trim();
+                menuItem.Url = url.Trim();
+                menuItem.Status = status;
+                menuItem.Icon = icon?.Trim();
+                menuItem.DisplayOrder = displayOrder;
+                menuItem.ParentId = parentId > 0 ? parentId : null;
+                menuItem.RequiresAuthentication = requiresAuthentication;
+                menuItem.UpdatedDate = DateTime.Now;
+
+                await context.SaveChangesAsync();
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = "Menu item updated successfully."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
+        public async Task<ResponseModel> DeleteMenuItemAsync(int id)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                var menuItem = await context.MenuItems
+                    .Include(m => m.Children)
+                    .FirstOrDefaultAsync(m => m.Id == id);
+                if (menuItem == null)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Menu item not found."
+                    };
+                }
+
+                // Check if menu item has children
+                if (menuItem.Children != null && menuItem.Children.Any())
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Cannot delete menu item. It has child menu items. Please delete or reassign children first."
+                    };
+                }
+
+                context.MenuItems.Remove(menuItem);
+                await context.SaveChangesAsync();
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = "Menu item deleted successfully."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
+        // Helper method to check if a menu item is a descendant of another
+        private async Task<bool> IsDescendantAsync(RegesterServiceContext context, int potentialParentId, int itemId)
+        {
+            var current = await context.MenuItems
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == potentialParentId);
+            
+            if (current == null) return false;
+            
+            // Traverse up the parent chain
+            while (current.ParentId.HasValue)
+            {
+                if (current.ParentId.Value == itemId)
+                {
+                    return true; // Found circular reference
+                }
+                current = await context.MenuItems
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.Id == current.ParentId.Value);
+                if (current == null) break;
+            }
+            
+            return false;
+        }
     }
 }
