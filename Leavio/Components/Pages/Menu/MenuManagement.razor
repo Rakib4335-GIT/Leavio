@@ -34,76 +34,11 @@ else
 {
 <div class="menu-management-page">
     <div class="menu-management-card">
-        <h1 class="page-title">Menu Management</h1>
-
-        <div class="add-menu-section">
-            <h2>@(editingMenuItem != null ? "Edit Menu Item" : "Add New Menu Item")</h2>
-            <form @onsubmit="HandleSaveMenuItem" @onsubmit:preventDefault="true" class="menu-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="menuName">Name *</label>
-                        <input type="text" id="menuName" @bind="menuName" placeholder="Enter menu name" required disabled="@isProcessing" class="form-control" />
-                    </div>
-                    <div class="form-group">
-                        <label for="menuUrl">URL *</label>
-                        <input type="text" id="menuUrl" @bind="menuUrl" placeholder="Enter URL (e.g., /home)" required disabled="@isProcessing" class="form-control" />
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="menuIcon">Icon (Optional)</label>
-                        <input type="text" id="menuIcon" @bind="menuIcon" placeholder="Enter icon class or SVG path" disabled="@isProcessing" class="form-control" />
-                        <small class="form-hint">e.g., "fa fa-home" or SVG path</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="displayOrder">Display Order</label>
-                        <input type="number" id="displayOrder" @bind="displayOrder" min="0" disabled="@isProcessing" class="form-control" />
-                        <small class="form-hint">Lower numbers appear first</small>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="parentMenu">Parent Menu (Optional)</label>
-                    <select id="parentMenu" @bind="selectedParentId" disabled="@isProcessing" class="form-control">
-                        <option value="0">-- None (Top Level) --</option>
-                        @foreach (var parent in parentMenuItems)
-                        {
-                            <option value="@parent.Id">@parent.Name</option>
-                        }
-                    </select>
-                    <small class="form-hint">Select a parent menu to create a submenu</small>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" @bind="menuStatus" disabled="@isProcessing" />
-                            <span>Active (Status)</span>
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" @bind="showWithoutLogin" disabled="@isProcessing" />
-                            <span>Show Without Login</span>
-                        </label>
-                        <small class="form-hint">Check if this menu should be visible to everyone (including non-logged-in users)</small>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-save-menu" disabled="@isProcessing">
-                        @if (isProcessing)
-                        {
-                            <text>@(editingMenuItem != null ? "Updating..." : "Adding...")</text>
-                        }
-                        else
-                        {
-                            <text>@(editingMenuItem != null ? "Update Menu Item" : "Add Menu Item")</text>
-                        }
-                    </button>
-                    @if (editingMenuItem != null)
-                    {
-                        <button type="button" @onclick="CancelEdit" class="btn-cancel" disabled="@isProcessing">Cancel</button>
-                    }
-                </div>
-            </form>
+        <div class="page-header">
+            <h1 class="page-title">Menu Management</h1>
+            <button type="button" @onclick="OpenAddPopup" class="btn-add" disabled="@isProcessing" title="Add Menu Item">
+                Add
+            </button>
         </div>
 
         @if (!string.IsNullOrEmpty(alertMessage))
@@ -114,7 +49,6 @@ else
         }
 
         <div class="menu-list-section">
-            <h2>Menu Items</h2>
             @if (menuItems.Any())
             {
                 <div class="table-container">
@@ -266,9 +200,87 @@ else
             }
             else
             {
-                <p class="no-menu-items">No menu items found. Please add a menu item above.</p>
+                <p class="no-menu-items">No menu items found. Click <strong>Add</strong> to create one.</p>
             }
         </div>
+
+        @* Add/Edit Modal Popup *@
+        @if (showModalOpen)
+        {
+            <div class="modal-overlay" @onclick="CloseModal">
+                <div class="modal-content" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h2 class="modal-title">@(editingMenuItem != null ? "Edit Menu Item" : "Add Menu Item")</h2>
+                        <button type="button" class="modal-close" @onclick="CloseModal" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form @onsubmit="HandleSaveMenuItem" @onsubmit:preventDefault="true" class="menu-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="menuName">Name *</label>
+                                    <input type="text" id="menuName" @bind="menuName" placeholder="Enter menu name" required disabled="@isProcessing" class="form-control" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="menuUrl">URL *</label>
+                                    <input type="text" id="menuUrl" @bind="menuUrl" placeholder="Enter URL (e.g., /home)" required disabled="@isProcessing" class="form-control" />
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="menuIcon">Icon (Optional)</label>
+                                    <input type="text" id="menuIcon" @bind="menuIcon" placeholder="Enter icon class or SVG path" disabled="@isProcessing" class="form-control" />
+                                    <small class="form-hint">e.g., "fa fa-home" or SVG path</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="displayOrder">Display Order</label>
+                                    <input type="number" id="displayOrder" @bind="displayOrder" min="0" disabled="@isProcessing" class="form-control" />
+                                    <small class="form-hint">Lower numbers appear first</small>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="parentMenu">Parent Menu (Optional)</label>
+                                <select id="parentMenu" @bind="selectedParentId" disabled="@isProcessing" class="form-control">
+                                    <option value="0">-- None (Top Level) --</option>
+                                    @foreach (var parent in parentMenuItems)
+                                    {
+                                        <option value="@parent.Id">@parent.Name</option>
+                                    }
+                                </select>
+                                <small class="form-hint">Select a parent menu to create a submenu</small>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" @bind="menuStatus" disabled="@isProcessing" />
+                                        <span>Active (Status)</span>
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" @bind="showWithoutLogin" disabled="@isProcessing" />
+                                        <span>Show Without Login</span>
+                                    </label>
+                                    <small class="form-hint">Visible to everyone including non-logged-in users</small>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn-save-menu" disabled="@isProcessing">
+                                    @if (isProcessing)
+                                    {
+                                        <text>@(editingMenuItem != null ? "Updating..." : "Adding...")</text>
+                                    }
+                                    else
+                                    {
+                                        <text>@(editingMenuItem != null ? "Update" : "Add")</text>
+                                    }
+                                </button>
+                                <button type="button" @onclick="CloseModal" class="btn-cancel" disabled="@isProcessing">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
 
         <div class="back-link">
             <a href="/">Back to Home</a>
@@ -293,6 +305,7 @@ else
     private bool isSuccess = false;
     private bool isAuthorized = false;
     private bool isCheckingAuth = true;
+    private bool showModalOpen = false;
     
     // Pagination variables
     private int currentPage = 1;
@@ -464,7 +477,7 @@ else
                     string.IsNullOrWhiteSpace(menuIcon) ? null : menuIcon.Trim(),
                     displayOrder,
                     parentId,
-                    !showWithoutLogin // Inverted: if showWithoutLogin is true, RequiresAuthentication is false
+                    !showWithoutLogin
                 );
             }
             else
@@ -478,7 +491,7 @@ else
                     string.IsNullOrWhiteSpace(menuIcon) ? null : menuIcon.Trim(),
                     displayOrder,
                     parentId,
-                    !showWithoutLogin // Inverted: if showWithoutLogin is true, RequiresAuthentication is false
+                    !showWithoutLogin
                 );
             }
 
@@ -487,6 +500,7 @@ else
 
             if (response.Success)
             {
+                showModalOpen = false;
                 ResetForm();
                 await LoadMenuItems();
                 await LoadParentMenuItems();
@@ -508,6 +522,14 @@ else
         }
     }
 
+    private async Task OpenAddPopup()
+    {
+        editingMenuItem = null;
+        await ResetForm();
+        showModalOpen = true;
+        StateHasChanged();
+    }
+
     private async Task EditMenuItem(MenuItem menuItem)
     {
         editingMenuItem = menuItem;
@@ -515,16 +537,18 @@ else
         menuUrl = menuItem.Url;
         menuIcon = menuItem.Icon;
         menuStatus = menuItem.Status;
-        showWithoutLogin = !menuItem.RequiresAuthentication; // Inverted: if RequiresAuthentication is false, showWithoutLogin is true
+        showWithoutLogin = !menuItem.RequiresAuthentication;
         displayOrder = menuItem.DisplayOrder;
         selectedParentId = menuItem.ParentId ?? 0;
-        await LoadParentMenuItems(); // Reload to exclude current item from parent list
+        await LoadParentMenuItems();
+        showModalOpen = true;
         StateHasChanged();
     }
 
-    private void CancelEdit()
+    private async Task CloseModal()
     {
-        ResetForm();
+        showModalOpen = false;
+        await ResetForm();
         StateHasChanged();
     }
 

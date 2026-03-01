@@ -1,4 +1,4 @@
-﻿using Leavio.DbModels;
+using Leavio.DbModels;
 using Leavio.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -781,6 +781,71 @@ namespace Leavio.PanelService
             }
         }
 
+        /// <summary>
+        /// Gets the menu layout: "Top" (horizontal header) or "Sidebar" (vertical left sidebar).
+        /// Default is "Top" if not set.
+        /// </summary>
+        public async Task<string> GetMenuLayoutAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var setting = await context.SystemSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.SettingKey == "MenuLayout");
+                if (setting == null || string.IsNullOrWhiteSpace(setting.SettingValue))
+                    return "Top";
+                var value = setting.SettingValue.Trim();
+                return value.Equals("Sidebar", StringComparison.OrdinalIgnoreCase) ? "Sidebar" : "Top";
+            }
+            catch (Exception)
+            {
+                return "Top";
+            }
+        }
+
+        /// <summary>
+        /// Sets the menu layout to "Top" or "Sidebar".
+        /// </summary>
+        public async Task<ResponseModel> SetMenuLayoutAsync(string layout)
+        {
+            var normalized = layout?.Trim().Equals("Sidebar", StringComparison.OrdinalIgnoreCase) == true ? "Sidebar" : "Top";
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var setting = await context.SystemSettings
+                    .FirstOrDefaultAsync(s => s.SettingKey == "MenuLayout");
+                if (setting == null)
+                {
+                    setting = new SystemSettings
+                    {
+                        SettingKey = "MenuLayout",
+                        SettingValue = normalized,
+                        Description = "Menu position: Top (horizontal header) or Sidebar (vertical left)"
+                    };
+                    await context.SystemSettings.AddAsync(setting);
+                }
+                else
+                {
+                    setting.SettingValue = normalized;
+                }
+                await context.SaveChangesAsync();
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = $"Menu is now shown in the {normalized.ToLowerInvariant()}."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred: {ex.Message}"
+                };
+            }
+        }
+
         public async Task<ResponseModel> UpdateProfileAsync(string userId, string name, string email, string? phoneNumber = null)
         {
             try
@@ -919,7 +984,6 @@ namespace Leavio.PanelService
             {
                 using var context = await _contextFactory.CreateDbContextAsync();
                 // Get only top-level menu items (ParentId is null) that are active
-                // Filter by authentication requirement: if not authenticated, only show items that don't require authentication
                 var query = context.MenuItems
                     .AsNoTracking()
                     .Where(m => m.Status == true && m.ParentId == null);

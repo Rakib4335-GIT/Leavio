@@ -11,24 +11,134 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
 .page-title {
     font-size: 28px;
     font-weight: bold;
-    margin-bottom: 30px;
+    margin: 0;
     color: #333;
-    text-align: center;
 }
 
-.add-menu-section {
-    margin-bottom: 40px;
-    padding-bottom: 30px;
-    border-bottom: 2px solid #e0e0e0;
+.btn-add {
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.add-menu-section h2 {
+.btn-add:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-add:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Modal popup */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    width: 65vw;
+    max-width: 720px;
+    min-width: 320px;
+    height: auto;
+    max-height: 90vh;
+    overflow: visible;
+    animation: slideIn 0.25s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #f8f9fa;
+    border-radius: 10px 10px 0 0;
+}
+
+.modal-title {
     font-size: 20px;
-    margin-bottom: 20px;
-    color: #555;
+    font-weight: 600;
+    margin: 0;
+    color: #333;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.modal-close:hover {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow: visible;
+}
+
+.modal-body .menu-form {
+    gap: 14px;
 }
 
 .menu-form {
@@ -142,6 +252,143 @@
 .btn-cancel:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+}
+
+/* Menu layout (Top vs Sidebar) section */
+.menu-layout-section {
+    margin-bottom: 28px;
+    padding: 18px 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.layout-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    color: #333;
+}
+
+.layout-section-hint {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 14px 0;
+}
+
+.layout-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.layout-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 18px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    flex: 1;
+    min-width: 160px;
+}
+
+.layout-option:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.06);
+}
+
+.layout-option.selected {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.layout-option input {
+    margin: 0 0 6px 0;
+}
+
+.layout-option-label {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.layout-option-desc {
+    font-size: 12px;
+    color: #666;
+}
+
+.btn-save-layout {
+    padding: 8px 18px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-save-layout:hover:not(:disabled) {
+    background: #5a6fd6;
+}
+
+.btn-save-layout:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.position-radio-group {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.position-radio {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.position-radio:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.06);
+}
+
+.position-radio.selected {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.position-radio input {
+    margin: 0;
+}
+
+.position-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.position-top {
+    background: #e7e9fc;
+    color: #5a6fd6;
+}
+
+.position-sidebar {
+    background: #e8f5e9;
+    color: #2e7d32;
 }
 
 .menu-list-section h2 {
@@ -519,10 +766,9 @@
 
     .page-title {
         font-size: 24px;
-        margin-bottom: 20px;
     }
 
-    .add-menu-section h2 {
+    .modal-title {
         font-size: 18px;
     }
 
@@ -593,17 +839,25 @@
 
     .page-title {
         font-size: 20px;
-        margin-bottom: 15px;
     }
 
-    .add-menu-section {
-        margin-bottom: 30px;
-        padding-bottom: 20px;
+    .modal-content {
+        width: 92vw;
+        height: auto;
+        max-height: 90vh;
+        margin: 10px;
     }
 
-    .add-menu-section h2 {
+    .modal-header {
+        padding: 14px 16px;
+    }
+
+    .modal-title {
         font-size: 16px;
-        margin-bottom: 15px;
+    }
+
+    .modal-body {
+        padding: 16px;
     }
 
     .form-group label {

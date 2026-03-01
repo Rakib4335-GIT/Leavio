@@ -1,4 +1,4 @@
-﻿@using Blazored.SessionStorage
+@using Blazored.SessionStorage
 @using Leavio.PanelService
 @using Leavio.DbModels
 @inject ISessionStorageService sessionStorage
@@ -9,110 +9,102 @@
 <div class="page" @onclick="HandlePageClick">
 
     <header class="header">
-        <div>
-            <img src="Images/Favicon1.png" alt="Logo" class="logo" @onclick="ShowImageModal" style="cursor: pointer;">
-            <span class="header-title">Leavio</span>
-        </div>
-
-        <div class="nav-links">
-            @foreach (var menuItem in activeMenuItems)
-            {
-                @if (menuItem.Children != null && menuItem.Children.Any())
+            <div>
+                <img src="Images/Favicon1.png" alt="Logo" class="logo" @onclick="ShowImageModal" style="cursor: pointer;">
+                <span class="header-title">Leavio</span>
+            </div>
+            <div class="nav-links">
+                @foreach (var menuItem in activeMenuItems)
                 {
-                    <div class="menu-dropdown" @onclick:stopPropagation="true">
-                        <button class="menu-trigger" @onclick="() => ToggleSubMenu(menuItem.Id)">
+                    @if (menuItem.Children != null && menuItem.Children.Any())
+                    {
+                        <div class="menu-dropdown" @onclick:stopPropagation="true">
+                            <button class="menu-trigger" @onclick="() => ToggleSubMenu(menuItem.Id)">
+                                @if (!string.IsNullOrEmpty(menuItem.Icon))
+                                {
+                                    <span class="menu-icon">@menuItem.Icon</span>
+                                }
+                                <span>@menuItem.Name</span>
+                                <span class="menu-arrow @(openSubMenus.Contains(menuItem.Id) ? "open" : "")">▼</span>
+                            </button>
+                            @if (openSubMenus.Contains(menuItem.Id))
+                            {
+                                <div class="menu-dropdown-content">
+                                    @foreach (var child in menuItem.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name))
+                                    {
+                                        <a href="@child.Url" class="menu-button" @onclick="() => CloseSubMenu(menuItem.Id)">
+                                            @if (!string.IsNullOrEmpty(child.Icon))
+                                            {
+                                                <span class="menu-icon">@child.Icon</span>
+                                            }
+                                            <span>@child.Name</span>
+                                        </a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <a href="@menuItem.Url">
                             @if (!string.IsNullOrEmpty(menuItem.Icon))
                             {
                                 <span class="menu-icon">@menuItem.Icon</span>
                             }
                             <span>@menuItem.Name</span>
-                            <span class="menu-arrow @(openSubMenus.Contains(menuItem.Id) ? "open" : "")">▼</span>
+                        </a>
+                    }
+                }
+            </div>
+            <div class="header-button">
+                @if (isLoggedIn)
+                {
+                    <div class="user-dropdown" @onclick:stopPropagation="true">
+                        <button class="user-dropdown-trigger" @onclick="ToggleUserMenu">
+                            <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span class="user-name">@userName</span>
+                            <svg class="dropdown-arrow @(showUserMenu ? "open" : "")" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
                         </button>
-                        @if (openSubMenus.Contains(menuItem.Id))
+                        @if (showUserMenu)
                         {
-                            <div class="menu-dropdown-content">
-                                @foreach (var child in menuItem.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name))
-                                {
-                                    <a href="@child.Url" class="menu-button" @onclick="() => CloseSubMenu(menuItem.Id)">
-                                        @if (!string.IsNullOrEmpty(child.Icon))
-                                        {
-                                            <span class="menu-icon">@child.Icon</span>
-                                        }
-                                        <span>@child.Name</span>
-                                    </a>
-                                }
+                            <div class="user-dropdown-overlay" @onclick="CloseUserMenu"></div>
+                            <div class="user-dropdown-menu">
+                                <button class="user-menu-item" @onclick="NavigateToProfile">
+                                    <svg class="menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                    <span>Profile</span>
+                                </button>
+                                <button class="user-menu-item logout-item" @onclick="Logout">
+                                    <svg class="menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                        <polyline points="16 17 21 12 16 7"></polyline>
+                                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                                    </svg>
+                                    <span>Logout</span>
+                                </button>
                             </div>
                         }
                     </div>
                 }
                 else
                 {
-                    <a href="@menuItem.Url">
-                        @if (!string.IsNullOrEmpty(menuItem.Icon))
-                        {
-                            <span class="menu-icon">@menuItem.Icon</span>
-                        }
-                        <span>@menuItem.Name</span>
-                    </a>
+                    <button @onclick="NavigateToLogin" class="btn btn-primary">Login</button>
+                    <button @onclick="NavigateToRegister" class="btn btn-danger">Register</button>
                 }
-            }
-        </div>
-
-
-
-
-        <div class="header-button">
-            @if (isLoggedIn)
-            {
-                <div class="user-dropdown" @onclick:stopPropagation="true">
-                    <button class="user-dropdown-trigger" @onclick="ToggleUserMenu">
-                        <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        <span class="user-name">@userName</span>
-                        <svg class="dropdown-arrow @(showUserMenu ? "open" : "")" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </button>
-                    @if (showUserMenu)
-                    {
-                        <div class="user-dropdown-overlay" @onclick="CloseUserMenu"></div>
-                        <div class="user-dropdown-menu">
-                            <button class="user-menu-item" @onclick="NavigateToProfile">
-                                <svg class="menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="12" cy="7" r="4"></circle>
-                                </svg>
-                                <span>Profile</span>
-                            </button>
-                            <button class="user-menu-item logout-item" @onclick="Logout">
-                                <svg class="menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                    <polyline points="16 17 21 12 16 7"></polyline>
-                                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                                </svg>
-                                <span>Logout</span>
-                            </button>
-                        </div>
-                    }
-                </div>
-            }
-            else
-            {
-                <button @onclick="NavigateToLogin" class="btn btn-primary">Login</button>
-                <button @onclick="NavigateToRegister" class="btn btn-danger">Register</button>
-            }
-
-        </div>
-
-    </header>
-
-    <main>
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
+            </div>
+        </header>
+        <main>
+            <article class="content px-4">
+                @Body
+            </article>
+        </main>
 </div>
 
 <ImageModal IsVisible="@showImageModal" 
@@ -157,7 +149,6 @@
                 isAdmin = string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
             }
             
-            // Load menu items based on login status
             await LoadMenuItems();
             StateHasChanged();
         }
@@ -172,7 +163,6 @@
         }
         catch (Exception)
         {
-            // If menu loading fails, use empty list (menu will be empty)
             activeMenuItems = new List<MenuItem>();
         }
     }
