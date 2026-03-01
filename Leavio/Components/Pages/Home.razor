@@ -1,7 +1,309 @@
-﻿@page "/"
+@page "/"
+@using Leavio.PanelService
+@using Leavio.Models
+@using Blazored.SessionStorage
+@using Microsoft.AspNetCore.Components
+
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="home-page">
+    @* Hero *@
+    <section class="home-hero">
+        <div class="home-hero-inner">
+            <h1 class="home-title">@content.HeroTitle</h1>
+            <p class="home-subtitle">@content.HeroSubtitle</p>
+            <div class="home-hero-cta">
+                <a href="@(string.IsNullOrWhiteSpace(content.HeroCtaPrimaryUrl) ? "/contact" : content.HeroCtaPrimaryUrl)" class="btn-hero-primary">@content.HeroCtaPrimary</a>
+                <a href="@(string.IsNullOrWhiteSpace(content.HeroCtaSecondaryUrl) ? "/aboutUs" : content.HeroCtaSecondaryUrl)" class="btn-hero-secondary">@content.HeroCtaSecondary</a>
+            </div>
+            @if (isAdmin)
+            {
+                <div class="home-actions">
+                    <button type="button" class="btn-home-edit" @onclick="OpenEditModal">Edit homepage</button>
+                </div>
+            }
+        </div>
+    </section>
 
-Welcome to your new app.
+    @* Features *@
+    <section class="home-section home-features">
+        <h2 class="home-section-title">@content.FeaturesTitle</h2>
+        <p class="home-section-lead">@content.FeaturesLead</p>
+        <div class="home-features-grid">
+            <div class="home-feature-card">
+                <div class="home-feature-icon">@content.Feature1Icon</div>
+                <h3 class="home-feature-title">@content.Feature1Title</h3>
+                <p class="home-feature-desc">@content.Feature1Desc</p>
+            </div>
+            <div class="home-feature-card">
+                <div class="home-feature-icon">@content.Feature2Icon</div>
+                <h3 class="home-feature-title">@content.Feature2Title</h3>
+                <p class="home-feature-desc">@content.Feature2Desc</p>
+            </div>
+            <div class="home-feature-card">
+                <div class="home-feature-icon">@content.Feature3Icon</div>
+                <h3 class="home-feature-title">@content.Feature3Title</h3>
+                <p class="home-feature-desc">@content.Feature3Desc</p>
+            </div>
+        </div>
+    </section>
+
+    @* About *@
+    <section class="home-section home-about">
+        <div class="home-about-inner">
+            <h2 class="home-section-title">@content.AboutTitle</h2>
+            <p class="home-about-text">@content.AboutText</p>
+            <a href="@(string.IsNullOrWhiteSpace(content.AboutButtonUrl) ? "/aboutUs" : content.AboutButtonUrl)" class="btn-about">@content.AboutButtonText</a>
+        </div>
+    </section>
+
+    @* Stats *@
+    <section class="home-section home-stats">
+        <div class="home-stats-grid">
+            <div class="home-stat-item">
+                <span class="home-stat-number">@content.Stat1Number</span>
+                <span class="home-stat-label">@content.Stat1Label</span>
+            </div>
+            <div class="home-stat-item">
+                <span class="home-stat-number">@content.Stat2Number</span>
+                <span class="home-stat-label">@content.Stat2Label</span>
+            </div>
+            <div class="home-stat-item">
+                <span class="home-stat-number">@content.Stat3Number</span>
+                <span class="home-stat-label">@content.Stat3Label</span>
+            </div>
+        </div>
+    </section>
+
+    @* Testimonials *@
+    <section class="home-section home-testimonials">
+        <h2 class="home-section-title">@content.TestimonialsTitle</h2>
+        <div class="home-testimonials-grid">
+            <blockquote class="home-testimonial-card">
+                <p class="home-testimonial-text">@content.Testimonial1Text</p>
+                <footer class="home-testimonial-author">@content.Testimonial1Author</footer>
+            </blockquote>
+            <blockquote class="home-testimonial-card">
+                <p class="home-testimonial-text">@content.Testimonial2Text</p>
+                <footer class="home-testimonial-author">@content.Testimonial2Author</footer>
+            </blockquote>
+        </div>
+    </section>
+
+    @* CTA *@
+    <section class="home-section home-cta">
+        <div class="home-cta-inner">
+            <h2 class="home-cta-title">@content.CtaTitle</h2>
+            <p class="home-cta-text">@content.CtaText</p>
+            <div class="home-cta-buttons">
+                <a href="@(string.IsNullOrWhiteSpace(content.CtaPrimaryUrl) ? "/register" : content.CtaPrimaryUrl)" class="btn-cta-primary">@content.CtaPrimaryText</a>
+                <a href="@(string.IsNullOrWhiteSpace(content.CtaSecondaryUrl) ? "/contact" : content.CtaSecondaryUrl)" class="btn-cta-secondary">@content.CtaSecondaryText</a>
+            </div>
+        </div>
+    </section>
+</div>
+
+@if (showModal)
+{
+    <div class="home-modal-overlay" @onclick="CloseModal">
+        <div class="home-modal-content home-modal-content-full" @onclick:stopPropagation="true">
+            <div class="home-modal-header">
+                <h2 class="home-modal-title">Edit all homepage content</h2>
+                <button type="button" class="home-modal-close" @onclick="CloseModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="home-modal-body">
+                <form @onsubmit="SaveContent" @onsubmit:preventDefault="true" class="home-form home-form-full">
+                    @if (!string.IsNullOrEmpty(alertMessage))
+                    {
+                        <div class="alert-message @(saveSuccess ? "alert-success" : "alert-error")">@alertMessage</div>
+                    }
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">Hero</h3>
+                        <div class="form-group"><label>Hero title</label><input type="text" @bind="editContent.HeroTitle" maxlength="200" class="form-control" /></div>
+                        <div class="form-group"><label>Hero subtitle</label><textarea @bind="editContent.HeroSubtitle" rows="2" maxlength="500" class="form-control"></textarea></div>
+                        <div class="form-group"><label>Primary button text</label><input type="text" @bind="editContent.HeroCtaPrimary" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Primary button URL</label><input type="text" @bind="editContent.HeroCtaPrimaryUrl" maxlength="500" class="form-control" placeholder="/contact" /></div>
+                        <div class="form-group"><label>Secondary button text</label><input type="text" @bind="editContent.HeroCtaSecondary" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Secondary button URL</label><input type="text" @bind="editContent.HeroCtaSecondaryUrl" maxlength="500" class="form-control" placeholder="/aboutUs" /></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">Features</h3>
+                        <div class="form-group"><label>Section title</label><input type="text" @bind="editContent.FeaturesTitle" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>Section lead</label><input type="text" @bind="editContent.FeaturesLead" maxlength="200" class="form-control" /></div>
+                        <div class="form-row-2">
+                            <div class="form-group"><label>Feature 1 icon (e.g. ◆)</label><input type="text" @bind="editContent.Feature1Icon" maxlength="20" class="form-control" /></div>
+                            <div class="form-group"><label>Feature 1 title</label><input type="text" @bind="editContent.Feature1Title" maxlength="100" class="form-control" /></div>
+                        </div>
+                        <div class="form-group"><label>Feature 1 description</label><textarea @bind="editContent.Feature1Desc" rows="2" maxlength="300" class="form-control"></textarea></div>
+                        <div class="form-row-2">
+                            <div class="form-group"><label>Feature 2 icon</label><input type="text" @bind="editContent.Feature2Icon" maxlength="20" class="form-control" /></div>
+                            <div class="form-group"><label>Feature 2 title</label><input type="text" @bind="editContent.Feature2Title" maxlength="100" class="form-control" /></div>
+                        </div>
+                        <div class="form-group"><label>Feature 2 description</label><textarea @bind="editContent.Feature2Desc" rows="2" maxlength="300" class="form-control"></textarea></div>
+                        <div class="form-row-2">
+                            <div class="form-group"><label>Feature 3 icon</label><input type="text" @bind="editContent.Feature3Icon" maxlength="20" class="form-control" /></div>
+                            <div class="form-group"><label>Feature 3 title</label><input type="text" @bind="editContent.Feature3Title" maxlength="100" class="form-control" /></div>
+                        </div>
+                        <div class="form-group"><label>Feature 3 description</label><textarea @bind="editContent.Feature3Desc" rows="2" maxlength="300" class="form-control"></textarea></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">About</h3>
+                        <div class="form-group"><label>Section title</label><input type="text" @bind="editContent.AboutTitle" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>About text</label><textarea @bind="editContent.AboutText" rows="4" maxlength="1000" class="form-control"></textarea></div>
+                        <div class="form-group"><label>Button text</label><input type="text" @bind="editContent.AboutButtonText" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Button URL</label><input type="text" @bind="editContent.AboutButtonUrl" maxlength="500" class="form-control" placeholder="/aboutUs" /></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">Stats</h3>
+                        <div class="form-row-2">
+                            <div class="form-group"><label>Stat 1 number (e.g. 500+)</label><input type="text" @bind="editContent.Stat1Number" maxlength="20" class="form-control" /></div>
+                            <div class="form-group"><label>Stat 1 label</label><input type="text" @bind="editContent.Stat1Label" maxlength="50" class="form-control" /></div>
+                        </div>
+                        <div class="form-row-2">
+                            <div class="form-group"><label>Stat 2 number</label><input type="text" @bind="editContent.Stat2Number" maxlength="20" class="form-control" /></div>
+                            <div class="form-group"><label>Stat 2 label</label><input type="text" @bind="editContent.Stat2Label" maxlength="50" class="form-control" /></div>
+                        </div>
+                        <div class="form-row-2">
+                            <div class="form-group"><label>Stat 3 number</label><input type="text" @bind="editContent.Stat3Number" maxlength="20" class="form-control" /></div>
+                            <div class="form-group"><label>Stat 3 label</label><input type="text" @bind="editContent.Stat3Label" maxlength="50" class="form-control" /></div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">Testimonials</h3>
+                        <div class="form-group"><label>Section title</label><input type="text" @bind="editContent.TestimonialsTitle" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>Testimonial 1 text</label><textarea @bind="editContent.Testimonial1Text" rows="2" maxlength="300" class="form-control"></textarea></div>
+                        <div class="form-group"><label>Testimonial 1 author</label><input type="text" @bind="editContent.Testimonial1Author" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>Testimonial 2 text</label><textarea @bind="editContent.Testimonial2Text" rows="2" maxlength="300" class="form-control"></textarea></div>
+                        <div class="form-group"><label>Testimonial 2 author</label><input type="text" @bind="editContent.Testimonial2Author" maxlength="100" class="form-control" /></div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">Call to action</h3>
+                        <div class="form-group"><label>CTA title</label><input type="text" @bind="editContent.CtaTitle" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>CTA text</label><input type="text" @bind="editContent.CtaText" maxlength="200" class="form-control" /></div>
+                        <div class="form-group"><label>Primary button text</label><input type="text" @bind="editContent.CtaPrimaryText" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Primary button URL</label><input type="text" @bind="editContent.CtaPrimaryUrl" maxlength="500" class="form-control" placeholder="/register" /></div>
+                        <div class="form-group"><label>Secondary button text</label><input type="text" @bind="editContent.CtaSecondaryText" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Secondary button URL</label><input type="text" @bind="editContent.CtaSecondaryUrl" maxlength="500" class="form-control" placeholder="/contact" /></div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-save" disabled="@saving">@(saving ? "Saving..." : "Save all")</button>
+                        <button type="button" class="btn-cancel" @onclick="CloseModal" disabled="@saving">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private HomePageContent content = new();
+    private HomePageContent editContent = new();
+    private bool isAdmin;
+    private bool showModal;
+    private bool saving;
+    private string alertMessage = "";
+    private bool saveSuccess;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var role = await sessionStorage.GetItemAsync<string>("adminRole");
+            isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+            content = await adminPanelService.GetHomePageContentAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void OpenEditModal()
+    {
+        editContent = new HomePageContent
+        {
+            HeroTitle = content.HeroTitle,
+            HeroSubtitle = content.HeroSubtitle,
+            HeroCtaPrimary = content.HeroCtaPrimary,
+            HeroCtaPrimaryUrl = content.HeroCtaPrimaryUrl,
+            HeroCtaSecondary = content.HeroCtaSecondary,
+            HeroCtaSecondaryUrl = content.HeroCtaSecondaryUrl,
+            FeaturesTitle = content.FeaturesTitle,
+            FeaturesLead = content.FeaturesLead,
+            Feature1Icon = content.Feature1Icon,
+            Feature1Title = content.Feature1Title,
+            Feature1Desc = content.Feature1Desc,
+            Feature2Icon = content.Feature2Icon,
+            Feature2Title = content.Feature2Title,
+            Feature2Desc = content.Feature2Desc,
+            Feature3Icon = content.Feature3Icon,
+            Feature3Title = content.Feature3Title,
+            Feature3Desc = content.Feature3Desc,
+            AboutTitle = content.AboutTitle,
+            AboutText = content.AboutText,
+            AboutButtonText = content.AboutButtonText,
+            AboutButtonUrl = content.AboutButtonUrl,
+            Stat1Number = content.Stat1Number,
+            Stat1Label = content.Stat1Label,
+            Stat2Number = content.Stat2Number,
+            Stat2Label = content.Stat2Label,
+            Stat3Number = content.Stat3Number,
+            Stat3Label = content.Stat3Label,
+            TestimonialsTitle = content.TestimonialsTitle,
+            Testimonial1Text = content.Testimonial1Text,
+            Testimonial1Author = content.Testimonial1Author,
+            Testimonial2Text = content.Testimonial2Text,
+            Testimonial2Author = content.Testimonial2Author,
+            CtaTitle = content.CtaTitle,
+            CtaText = content.CtaText,
+            CtaPrimaryText = content.CtaPrimaryText,
+            CtaPrimaryUrl = content.CtaPrimaryUrl,
+            CtaSecondaryText = content.CtaSecondaryText,
+            CtaSecondaryUrl = content.CtaSecondaryUrl
+        };
+        alertMessage = "";
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        alertMessage = "";
+    }
+
+    private async Task SaveContent()
+    {
+        if (saving) return;
+        saving = true;
+        alertMessage = "";
+        try
+        {
+            var result = await adminPanelService.SetHomePageContentFullAsync(editContent);
+            saveSuccess = result.Success;
+            alertMessage = result.Message;
+            if (result.Success)
+            {
+                content = editContent;
+                CloseModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            saveSuccess = false;
+            alertMessage = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+            StateHasChanged();
+        }
+    }
+}

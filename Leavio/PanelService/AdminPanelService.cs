@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Leavio.DbModels;
 using Leavio.Models;
 using Microsoft.EntityFrameworkCore;
@@ -846,6 +847,390 @@ namespace Leavio.PanelService
             }
         }
 
+        /// <summary>Gets the home page title. Default: "Hello, world!"</summary>
+        public async Task<string> GetHomePageTitleAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var setting = await context.SystemSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.SettingKey == "HomePageTitle");
+                return string.IsNullOrWhiteSpace(setting?.SettingValue) ? "Hello, world!" : setting.SettingValue.Trim();
+            }
+            catch (Exception)
+            {
+                return "Hello, world!";
+            }
+        }
+
+        /// <summary>Gets the home page subtitle/welcome text. Default: "Welcome to your new app."</summary>
+        public async Task<string> GetHomePageSubtitleAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var setting = await context.SystemSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.SettingKey == "HomePageSubtitle");
+                return string.IsNullOrWhiteSpace(setting?.SettingValue) ? "Welcome to your new app." : setting.SettingValue.Trim();
+            }
+            catch (Exception)
+            {
+                return "Welcome to your new app.";
+            }
+        }
+
+        /// <summary>Saves the home page title and subtitle.</summary>
+        public async Task<ResponseModel> SetHomePageContentAsync(string title, string subtitle)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                title = "Hello, world!";
+            if (string.IsNullOrWhiteSpace(subtitle))
+                subtitle = "Welcome to your new app.";
+            title = title.Trim();
+            subtitle = subtitle.Trim();
+            if (title.Length > 200)
+                return new ResponseModel { Success = false, Message = "Title cannot exceed 200 characters." };
+            if (subtitle.Length > 500)
+                return new ResponseModel { Success = false, Message = "Subtitle cannot exceed 500 characters." };
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                foreach (var key in new[] { "HomePageTitle", "HomePageSubtitle" })
+                {
+                    var setting = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == key);
+                    var value = key == "HomePageTitle" ? title : subtitle;
+                    if (setting == null)
+                    {
+                        setting = new SystemSettings
+                        {
+                            SettingKey = key,
+                            SettingValue = value,
+                            Description = key == "HomePageTitle" ? "Home page main heading" : "Home page welcome text"
+                        };
+                        await context.SystemSettings.AddAsync(setting);
+                    }
+                    else
+                    {
+                        setting.SettingValue = value;
+                    }
+                }
+                await context.SaveChangesAsync();
+                return new ResponseModel { Success = true, Message = "Home page content saved successfully." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        private static readonly string ContactPrefix = "Contact_";
+
+        /// <summary>Gets all contact page content from settings. Missing keys return model defaults.</summary>
+        public async Task<ContactPageContent> GetContactPageContentAsync()
+        {
+            var model = new ContactPageContent();
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var settings = await context.SystemSettings
+                    .AsNoTracking()
+                    .Where(s => s.SettingKey.StartsWith(ContactPrefix))
+                    .ToListAsync();
+                var dict = settings.ToDictionary(s => s.SettingKey, s => s.SettingValue ?? "");
+                foreach (var prop in typeof(ContactPageContent).GetProperties())
+                {
+                    if (prop.CanRead && prop.CanWrite && prop.PropertyType == typeof(string))
+                    {
+                        var key = ContactPrefix + prop.Name;
+                        if (dict.TryGetValue(key, out var val) && !string.IsNullOrEmpty(val))
+                            prop.SetValue(model, val.Trim());
+                    }
+                }
+                if (dict.TryGetValue(ContactPrefix + "SocialLinks", out var socialLinksJson) && !string.IsNullOrWhiteSpace(socialLinksJson))
+                {
+                    try
+                    {
+                        var list = JsonSerializer.Deserialize<List<SocialLinkItem>>(socialLinksJson);
+                        if (list != null)
+                            model.SocialLinks = list;
+                    }
+                    catch { /* keep default */ }
+                }
+                else if (dict.TryGetValue(ContactPrefix + "SocialUrls", out var socialUrlsJson) && !string.IsNullOrWhiteSpace(socialUrlsJson))
+                {
+                    try
+                    {
+                        var urlList = JsonSerializer.Deserialize<List<string>>(socialUrlsJson);
+                        if (urlList != null && urlList.Count > 0)
+                            model.SocialLinks = urlList.Where(u => !string.IsNullOrWhiteSpace(u)).Select(u => new SocialLinkItem { Url = u.Trim(), Name = "", Icon = "" }).ToList();
+                    }
+                    catch { /* keep default */ }
+                }
+                else
+                {
+                    var legacy = new List<SocialLinkItem>();
+                    for (int i = 1; i <= 5; i++)
+                    {
+                        if (dict.TryGetValue(ContactPrefix + "Social" + i + "Url", out var u) && !string.IsNullOrWhiteSpace(u))
+                            legacy.Add(new SocialLinkItem { Url = u.Trim(), Name = "", Icon = "" });
+                    }
+                    if (legacy.Count > 0)
+                        model.SocialLinks = legacy;
+                }
+                return model;
+            }
+            catch (Exception)
+            {
+                return model;
+            }
+        }
+
+        /// <summary>Saves all contact page content to settings.</summary>
+        public async Task<ResponseModel> SetContactPageContentFullAsync(ContactPageContent content)
+        {
+            if (content == null)
+                return new ResponseModel { Success = false, Message = "Content is required." };
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                foreach (var prop in typeof(ContactPageContent).GetProperties())
+                {
+                    if (prop.CanRead && prop.CanWrite && prop.PropertyType == typeof(string))
+                    {
+                        var key = ContactPrefix + prop.Name;
+                        var value = (prop.GetValue(content) as string)?.Trim() ?? "";
+                        var setting = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == key);
+                        if (setting == null)
+                        {
+                            setting = new SystemSettings
+                            {
+                                SettingKey = key,
+                                SettingValue = value,
+                                Description = "Contact page: " + prop.Name
+                            };
+                            await context.SystemSettings.AddAsync(setting);
+                        }
+                        else
+                        {
+                            setting.SettingValue = value;
+                        }
+                    }
+                }
+                var socialLinksJson = JsonSerializer.Serialize(content.SocialLinks ?? new List<SocialLinkItem>());
+                var socialKey = ContactPrefix + "SocialLinks";
+                var socialSetting = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == socialKey);
+                if (socialSetting == null)
+                {
+                    socialSetting = new SystemSettings { SettingKey = socialKey, SettingValue = socialLinksJson, Description = "Contact page: SocialLinks (JSON)" };
+                    await context.SystemSettings.AddAsync(socialSetting);
+                }
+                else
+                    socialSetting.SettingValue = socialLinksJson;
+                var oldSocialUrls = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == ContactPrefix + "SocialUrls");
+                if (oldSocialUrls != null) context.SystemSettings.Remove(oldSocialUrls);
+                for (int i = 1; i <= 10; i++)
+                {
+                    var oldKey = ContactPrefix + "Social" + i + "Url";
+                    var old = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == oldKey);
+                    if (old != null) context.SystemSettings.Remove(old);
+                }
+                await context.SaveChangesAsync();
+                return new ResponseModel { Success = true, Message = "Contact page content saved successfully." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        private static readonly string AboutUsPrefix = "AboutUs_";
+
+        /// <summary>Gets all About Us page content from settings. Missing keys return model defaults.</summary>
+        public async Task<AboutUsPageContent> GetAboutUsPageContentAsync()
+        {
+            var model = new AboutUsPageContent();
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var settings = await context.SystemSettings
+                    .AsNoTracking()
+                    .Where(s => s.SettingKey.StartsWith(AboutUsPrefix))
+                    .ToListAsync();
+                var dict = settings.ToDictionary(s => s.SettingKey, s => s.SettingValue ?? "");
+                foreach (var prop in typeof(AboutUsPageContent).GetProperties())
+                {
+                    if (prop.CanRead && prop.CanWrite && prop.PropertyType == typeof(string))
+                    {
+                        var key = AboutUsPrefix + prop.Name;
+                        if (dict.TryGetValue(key, out var val) && !string.IsNullOrEmpty(val))
+                            prop.SetValue(model, val.Trim());
+                    }
+                }
+                if (dict.TryGetValue(AboutUsPrefix + "Values", out var valuesJson) && !string.IsNullOrWhiteSpace(valuesJson))
+                {
+                    try
+                    {
+                        var list = JsonSerializer.Deserialize<List<ValueCardItem>>(valuesJson);
+                        if (list != null && list.Count > 0)
+                            model.Values = list;
+                    }
+                    catch { /* keep default Values */ }
+                }
+                else
+                {
+                    var legacy = new List<ValueCardItem>();
+                    for (int i = 1; i <= 3; i++)
+                    {
+                        if (dict.TryGetValue(AboutUsPrefix + "Value" + i + "Title", out var t) && dict.TryGetValue(AboutUsPrefix + "Value" + i + "Text", out var b))
+                            legacy.Add(new ValueCardItem { Title = (t ?? "").Trim(), Text = (b ?? "").Trim() });
+                    }
+                    if (legacy.Count > 0)
+                        model.Values = legacy;
+                }
+                return model;
+            }
+            catch (Exception)
+            {
+                return model;
+            }
+        }
+
+        /// <summary>Saves all About Us page content to settings.</summary>
+        public async Task<ResponseModel> SetAboutUsPageContentFullAsync(AboutUsPageContent content)
+        {
+            if (content == null)
+                return new ResponseModel { Success = false, Message = "Content is required." };
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                foreach (var prop in typeof(AboutUsPageContent).GetProperties())
+                {
+                    if (prop.CanRead && prop.CanWrite && prop.PropertyType == typeof(string))
+                    {
+                        var key = AboutUsPrefix + prop.Name;
+                        var value = (prop.GetValue(content) as string)?.Trim() ?? "";
+                        var setting = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == key);
+                        if (setting == null)
+                        {
+                            setting = new SystemSettings
+                            {
+                                SettingKey = key,
+                                SettingValue = value,
+                                Description = "About Us page: " + prop.Name
+                            };
+                            await context.SystemSettings.AddAsync(setting);
+                        }
+                        else
+                        {
+                            setting.SettingValue = value;
+                        }
+                    }
+                }
+                var valuesJson = JsonSerializer.Serialize(content.Values ?? new List<ValueCardItem>());
+                var valuesKey = AboutUsPrefix + "Values";
+                var valuesSetting = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == valuesKey);
+                if (valuesSetting == null)
+                {
+                    valuesSetting = new SystemSettings { SettingKey = valuesKey, SettingValue = valuesJson, Description = "About Us page: Values (JSON)" };
+                    await context.SystemSettings.AddAsync(valuesSetting);
+                }
+                else
+                    valuesSetting.SettingValue = valuesJson;
+                for (int i = 1; i <= 10; i++)
+                {
+                    var k1 = AboutUsPrefix + "Value" + i + "Title";
+                    var k2 = AboutUsPrefix + "Value" + i + "Text";
+                    var old1 = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == k1);
+                    var old2 = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == k2);
+                    if (old1 != null) context.SystemSettings.Remove(old1);
+                    if (old2 != null) context.SystemSettings.Remove(old2);
+                }
+                await context.SaveChangesAsync();
+                return new ResponseModel { Success = true, Message = "About Us page content saved successfully." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        private static readonly string HomePrefix = "Home_";
+
+        /// <summary>Gets all homepage content from settings. Missing keys return model defaults.</summary>
+        public async Task<HomePageContent> GetHomePageContentAsync()
+        {
+            var model = new HomePageContent();
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                var settings = await context.SystemSettings
+                    .AsNoTracking()
+                    .Where(s => s.SettingKey.StartsWith(HomePrefix) || s.SettingKey == "HomePageTitle" || s.SettingKey == "HomePageSubtitle")
+                    .ToListAsync();
+                var dict = settings.ToDictionary(s => s.SettingKey, s => s.SettingValue ?? "");
+                foreach (var prop in typeof(HomePageContent).GetProperties())
+                {
+                    if (prop.CanRead && prop.CanWrite && prop.PropertyType == typeof(string))
+                    {
+                        var key = HomePrefix + prop.Name;
+                        if (dict.TryGetValue(key, out var val) && !string.IsNullOrEmpty(val))
+                            prop.SetValue(model, val.Trim());
+                    }
+                }
+                if (!dict.ContainsKey(HomePrefix + "HeroTitle") && dict.TryGetValue("HomePageTitle", out var oldTitle) && !string.IsNullOrWhiteSpace(oldTitle))
+                    model.HeroTitle = oldTitle.Trim();
+                if (!dict.ContainsKey(HomePrefix + "HeroSubtitle") && dict.TryGetValue("HomePageSubtitle", out var oldSub) && !string.IsNullOrWhiteSpace(oldSub))
+                    model.HeroSubtitle = oldSub.Trim();
+                return model;
+            }
+            catch (Exception)
+            {
+                return model;
+            }
+        }
+
+        /// <summary>Saves all homepage content to settings.</summary>
+        public async Task<ResponseModel> SetHomePageContentFullAsync(HomePageContent content)
+        {
+            if (content == null)
+                return new ResponseModel { Success = false, Message = "Content is required." };
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                foreach (var prop in typeof(HomePageContent).GetProperties())
+                {
+                    if (prop.CanRead && prop.CanWrite && prop.PropertyType == typeof(string))
+                    {
+                        var key = HomePrefix + prop.Name;
+                        var value = (prop.GetValue(content) as string)?.Trim() ?? "";
+                        var setting = await context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == key);
+                        if (setting == null)
+                        {
+                            setting = new SystemSettings
+                            {
+                                SettingKey = key,
+                                SettingValue = value,
+                                Description = "Home page: " + prop.Name
+                            };
+                            await context.SystemSettings.AddAsync(setting);
+                        }
+                        else
+                        {
+                            setting.SettingValue = value;
+                        }
+                    }
+                }
+                await context.SaveChangesAsync();
+                return new ResponseModel { Success = true, Message = "Home page content saved successfully." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
         public async Task<ResponseModel> UpdateProfileAsync(string userId, string name, string email, string? phoneNumber = null)
         {
             try
@@ -1085,15 +1470,6 @@ namespace Leavio.PanelService
                     };
                 }
 
-                if (string.IsNullOrWhiteSpace(url))
-                {
-                    return new ResponseModel
-                    {
-                        Success = false,
-                        Message = "Menu URL is required."
-                    };
-                }
-
                 if (name.Length > 100)
                 {
                     return new ResponseModel
@@ -1103,7 +1479,7 @@ namespace Leavio.PanelService
                     };
                 }
 
-                if (url.Length > 500)
+                if (!string.IsNullOrWhiteSpace(url) && url.Length > 500)
                 {
                     return new ResponseModel
                     {
@@ -1131,7 +1507,7 @@ namespace Leavio.PanelService
                 var menuItem = new MenuItem
                 {
                     Name = name.Trim(),
-                    Url = url.Trim(),
+                    Url = url?.Trim() ?? "",
                     Status = status,
                     Icon = icon?.Trim(),
                     DisplayOrder = displayOrder,
@@ -1185,15 +1561,6 @@ namespace Leavio.PanelService
                     };
                 }
 
-                if (string.IsNullOrWhiteSpace(url))
-                {
-                    return new ResponseModel
-                    {
-                        Success = false,
-                        Message = "Menu URL is required."
-                    };
-                }
-
                 if (name.Length > 100)
                 {
                     return new ResponseModel
@@ -1203,7 +1570,7 @@ namespace Leavio.PanelService
                     };
                 }
 
-                if (url.Length > 500)
+                if (!string.IsNullOrWhiteSpace(url) && url.Length > 500)
                 {
                     return new ResponseModel
                     {
@@ -1250,7 +1617,7 @@ namespace Leavio.PanelService
                 }
 
                 menuItem.Name = name.Trim();
-                menuItem.Url = url.Trim();
+                menuItem.Url = url?.Trim() ?? "";
                 menuItem.Status = status;
                 menuItem.Icon = icon?.Trim();
                 menuItem.DisplayOrder = displayOrder;

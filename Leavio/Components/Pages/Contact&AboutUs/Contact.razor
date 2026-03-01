@@ -1,8 +1,321 @@
-﻿@page "/contact"
+@page "/contact"
+@using Leavio.PanelService
+@using Leavio.Models
+@using Blazored.SessionStorage
 
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
 
-<PageTitle>Contact</PageTitle>
+<PageTitle>@content.Title</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="contact-page">
+    <section class="contact-hero">
+        <div class="contact-hero-inner">
+            <h1 class="contact-title">@content.Title</h1>
+            <p class="contact-lead">@content.Lead</p>
+            @if (isAdmin)
+            {
+                <div class="contact-actions">
+                    <button type="button" class="btn-contact-edit" @onclick="OpenEditModal">Edit contact page</button>
+                </div>
+            }
+        </div>
+    </section>
+    <section class="contact-section">
+        <div class="contact-container">
+        <div class="contact-layout">
+            <div class="contact-info">
+                <h1 class="contact-main-heading">@content.SideTitle</h1>
+                <p class="contact-subheading">@content.SubHeading</p>
+                <p class="contact-intro">@content.SideText</p>
+                @if (!string.IsNullOrWhiteSpace(content.EmailAddress))
+                {
+                    <p class="contact-email-wrap">
+                        <span class="contact-email-icon" aria-hidden="true">&#9993;</span>
+                        <a href="mailto:@content.EmailAddress" class="contact-email-link">@content.EmailAddress</a>
+                    </p>
+                }
+                <div class="contact-social">
+                    @foreach (var item in content.SocialLinks ?? new List<SocialLinkItem>())
+                    {
+                        @if (!string.IsNullOrWhiteSpace(item.Url))
+                        {
+                            <a href="@item.Url.Trim()" class="contact-social-icon" style="background-color: @GetSocialIconColor(item);" target="_blank" rel="noopener noreferrer" aria-label="@(string.IsNullOrWhiteSpace(item.Name) ? "Social link" : item.Name)" title="@item.Name">
+                                @if (!string.IsNullOrWhiteSpace(item.Icon))
+                                {
+                                    @if (IsFontAwesomeClass(item.Icon))
+                                    {
+                                        <i class="@item.Icon.Trim()" aria-hidden="true"></i>
+                                    }
+                                    else
+                                    {
+                                        <span class="contact-social-icon-char">@item.Icon</span>
+                                    }
+                                }
+                                else if (!string.IsNullOrWhiteSpace(item.Name))
+                                {
+                                    <span class="contact-social-icon-char">@(item.Name.Length > 0 ? item.Name[0].ToString().ToUpperInvariant() : "")</span>
+                                }
+                                else
+                                {
+                                    <span class="contact-social-icon-char">&#9829;</span>
+                                }
+                            </a>
+                        }
+                    }
+                </div>
+            </div>
+            <div class="contact-form-column">
+                @if (!submitted)
+                {
+                    <form @onsubmit="HandleSubmit" @onsubmit:preventDefault="true" class="contact-form">
+                        <div class="contact-form-row">
+                            <div class="form-group">
+                                <label>@content.LabelFirstName</label>
+                                <input type="text" @bind="formFirstName" required maxlength="200" class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label>@content.LabelLastName</label>
+                                <input type="text" @bind="formLastName" required maxlength="200" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>@content.LabelEmail <span class="required">*</span></label>
+                            <input type="email" @bind="formEmail" required maxlength="200" class="form-control" />
+                        </div>
+                        <div class="form-group">
+                            <label>@content.LabelMessage</label>
+                            <textarea @bind="formMessage" required rows="5" maxlength="2000" class="form-control"></textarea>
+                        </div>
+                        <div class="contact-form-actions">
+                            <button type="submit" class="btn-contact-submit">@content.SubmitButtonText</button>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div class="contact-success">
+                        <p class="contact-success-message">@content.SuccessMessage</p>
+                        <button type="button" class="btn-contact-again" @onclick="ResetForm">Send again</button>
+                    </div>
+                }
+            </div>
+        </div>
+        </div>
+    </section>
+</div>
 
-Welcome to your new app.
+@if (showModal)
+{
+    <div class="contact-modal-overlay" @onclick="CloseModal">
+        <div class="contact-modal-content" @onclick:stopPropagation="true">
+            <div class="contact-modal-header">
+                <h2 class="contact-modal-title">Edit contact page content</h2>
+                <button type="button" class="contact-modal-close" @onclick="CloseModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="contact-modal-body">
+                <form @onsubmit="SaveContent" @onsubmit:preventDefault="true" class="contact-edit-form">
+                    @if (!string.IsNullOrEmpty(alertMessage))
+                    {
+                        <div class="alert-message @(saveSuccess ? "alert-success" : "alert-error")">@alertMessage</div>
+                    }
+                    <div class="form-section">
+                        <h3 class="form-section-title">Left column (contact info)</h3>
+                        <div class="form-group"><label>Main heading</label><input type="text" @bind="editContent.SideTitle" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>Sub-heading</label><input type="text" @bind="editContent.SubHeading" maxlength="150" class="form-control" /></div>
+                        <div class="form-group"><label>Intro text</label><textarea @bind="editContent.SideText" rows="2" maxlength="500" class="form-control"></textarea></div>
+                        <div class="form-group"><label>Email address</label><input type="text" @bind="editContent.EmailAddress" maxlength="200" class="form-control" placeholder="you@example.com" /></div>
+                        <div class="form-group">
+                            <label>Social links</label>
+                            @for (var idx = 0; idx < (editContent.SocialLinks ?? new List<SocialLinkItem>()).Count; idx++)
+                            {
+                                var index = idx;
+                                <div class="social-link-block" @key="idx">
+                                    <div class="social-link-fields">
+                                        <div class="form-group social-link-icon-field">
+                                            <label>Icon</label>
+                                            <input type="text" @bind="editContent.SocialLinks[index].Icon" maxlength="50" class="form-control" placeholder="e.g. fab fa-instagram, fa fa-envelope" />
+                                        </div>
+                                        <div class="form-group social-link-name-field">
+                                            <label>Name</label>
+                                            <input type="text" @bind="editContent.SocialLinks[index].Name" maxlength="100" class="form-control" placeholder="e.g. Facebook" />
+                                        </div>
+                                        <div class="form-group social-link-url-field">
+                                            <label>URL</label>
+                                            <input type="text" @bind="editContent.SocialLinks[index].Url" maxlength="500" class="form-control" placeholder="https://..." />
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn-remove-social" @onclick="() => RemoveSocialLink(index)" title="Remove link">Remove</button>
+                                </div>
+                            }
+                            <button type="button" class="btn-add-social" @onclick="AddSocialLink">Add link</button>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title">Form labels</h3>
+                        <div class="form-group"><label>First Name label</label><input type="text" @bind="editContent.LabelFirstName" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Last Name label</label><input type="text" @bind="editContent.LabelLastName" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Email label</label><input type="text" @bind="editContent.LabelEmail" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Message label</label><input type="text" @bind="editContent.LabelMessage" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Submit button text</label><input type="text" @bind="editContent.SubmitButtonText" maxlength="50" class="form-control" /></div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title">Messages</h3>
+                        <div class="form-group"><label>Success message (after submit)</label><textarea @bind="editContent.SuccessMessage" rows="2" maxlength="500" class="form-control"></textarea></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-save" disabled="@saving">@(saving ? "Saving..." : "Save all")</button>
+                        <button type="button" class="btn-cancel" @onclick="CloseModal" disabled="@saving">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private ContactPageContent content = new();
+    private ContactPageContent editContent = new();
+    private bool isAdmin;
+    private bool showModal;
+    private bool saving;
+    private string alertMessage = "";
+    private bool saveSuccess;
+    private bool submitted;
+    private string formFirstName = "";
+    private string formLastName = "";
+    private string formEmail = "";
+    private string formMessage = "";
+
+    private static string GetSocialIconColor(SocialLinkItem item)
+    {
+        var name = (item.Name ?? "").ToLowerInvariant();
+        var url = (item.Url ?? "").ToLowerInvariant();
+        var combined = name + " " + url;
+        if (combined.Contains("facebook")) return "#1877F2";
+        if (combined.Contains("messenger") || combined.Contains("fb.me") || combined.Contains("m.me")) return "#0084FF";
+        if (combined.Contains("twitter") || combined.Contains("x.com")) return "#1DA1F1";
+        if (combined.Contains("google")) return "#DB4437";
+        if (combined.Contains("instagram")) return "#E4405F";
+        if (combined.Contains("linkedin")) return "#0A66C2";
+        if (combined.Contains("youtube")) return "#FF0000";
+        if (combined.Contains("pinterest")) return "#BD081C";
+        if (combined.Contains("tiktok")) return "#000000";
+        if (combined.Contains("whatsapp")) return "#25D366";
+        return "#667eea";
+    }
+
+    private static bool IsFontAwesomeClass(string icon)
+    {
+        if (string.IsNullOrWhiteSpace(icon)) return false;
+        var t = icon.Trim();
+        return t.Contains("fa-", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("fa ", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("fab ", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("fas ", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("far ", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("fal ", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("fat ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var role = await sessionStorage.GetItemAsync<string>("adminRole");
+            isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+            content = await adminPanelService.GetContactPageContentAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void HandleSubmit()
+    {
+        submitted = true;
+        StateHasChanged();
+    }
+
+    private void ResetForm()
+    {
+        submitted = false;
+        formFirstName = "";
+        formLastName = "";
+        formEmail = "";
+        formMessage = "";
+        StateHasChanged();
+    }
+
+    private void OpenEditModal()
+    {
+        editContent = new ContactPageContent
+        {
+            Title = content.Title,
+            Lead = content.Lead,
+            SideTitle = content.SideTitle,
+            SubHeading = content.SubHeading,
+            SideText = content.SideText,
+            EmailAddress = content.EmailAddress,
+            SocialLinks = content.SocialLinks != null ? content.SocialLinks.Select(s => new SocialLinkItem { Icon = s.Icon ?? "", Name = s.Name ?? "", Url = s.Url ?? "" }).ToList() : new List<SocialLinkItem>(),
+            LabelFirstName = content.LabelFirstName,
+            LabelLastName = content.LabelLastName,
+            LabelEmail = content.LabelEmail,
+            LabelMessage = content.LabelMessage,
+            LabelName = content.LabelName,
+            LabelSubject = content.LabelSubject,
+            SubmitButtonText = content.SubmitButtonText,
+            SuccessMessage = content.SuccessMessage
+        };
+        if (editContent.SocialLinks == null || editContent.SocialLinks.Count == 0)
+            editContent.SocialLinks = new List<SocialLinkItem> { new SocialLinkItem() };
+        alertMessage = "";
+        showModal = true;
+    }
+
+    private void AddSocialLink()
+    {
+        editContent.SocialLinks ??= new List<SocialLinkItem>();
+        editContent.SocialLinks.Add(new SocialLinkItem());
+        StateHasChanged();
+    }
+
+    private void RemoveSocialLink(int index)
+    {
+        if (editContent.SocialLinks == null || index < 0 || index >= editContent.SocialLinks.Count) return;
+        editContent.SocialLinks.RemoveAt(index);
+        StateHasChanged();
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        alertMessage = "";
+    }
+
+    private async Task SaveContent()
+    {
+        if (saving) return;
+        saving = true;
+        alertMessage = "";
+        try
+        {
+            var result = await adminPanelService.SetContactPageContentFullAsync(editContent);
+            saveSuccess = result.Success;
+            alertMessage = result.Message;
+            if (result.Success)
+            {
+                content = editContent;
+                CloseModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            saveSuccess = false;
+            alertMessage = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+            StateHasChanged();
+        }
+    }
+}

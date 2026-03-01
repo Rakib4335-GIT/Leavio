@@ -221,8 +221,8 @@ else
                                     <input type="text" id="menuName" @bind="menuName" placeholder="Enter menu name" required disabled="@isProcessing" class="form-control" />
                                 </div>
                                 <div class="form-group">
-                                    <label for="menuUrl">URL *</label>
-                                    <input type="text" id="menuUrl" @bind="menuUrl" placeholder="Enter URL (e.g., /home)" required disabled="@isProcessing" class="form-control" />
+                                    <label for="menuUrl">URL</label>
+                                    <input type="text" id="menuUrl" @bind="menuUrl" placeholder="Enter URL (e.g., /home)" disabled="@isProcessing" class="form-control" />
                                 </div>
                             </div>
                             <div class="form-row">
@@ -431,14 +431,6 @@ else
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(menuUrl))
-        {
-            alertMessage = "Menu URL is required.";
-            isSuccess = false;
-            StateHasChanged();
-            return;
-        }
-
         if (menuName.Length > 100)
         {
             alertMessage = "Menu name cannot exceed 100 characters.";
@@ -447,7 +439,7 @@ else
             return;
         }
 
-        if (menuUrl.Length > 500)
+        if (!string.IsNullOrWhiteSpace(menuUrl) && menuUrl.Length > 500)
         {
             alertMessage = "Menu URL cannot exceed 500 characters.";
             isSuccess = false;

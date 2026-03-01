@@ -1,8 +1,196 @@
-﻿@page "/aboutUs"
+@page "/aboutUs"
+@using Leavio.PanelService
+@using Leavio.Models
+@using Blazored.SessionStorage
 
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
 
-<PageTitle>About Us</PageTitle>
+<PageTitle>@content.Title</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="about-page">
+    <section class="about-hero">
+        <div class="about-hero-inner">
+            <h1 class="about-title">@content.Title</h1>
+            <p class="about-lead">@content.Lead</p>
+            @if (isAdmin)
+            {
+                <div class="about-actions">
+                    <button type="button" class="btn-about-edit" @onclick="OpenEditModal">Edit About Us page</button>
+                </div>
+            }
+        </div>
+    </section>
 
-Welcome to your new app.
+    <section class="about-section about-story">
+        <h2 class="about-section-title">@content.StoryTitle</h2>
+        <p class="about-story-text">@content.StoryText</p>
+    </section>
+
+    <section class="about-section about-values">
+        <h2 class="about-section-title">@content.ValuesTitle</h2>
+        <div class="about-values-grid">
+            @foreach (var v in content.Values ?? new List<ValueCardItem>())
+            {
+                <div class="about-value-card">
+                    <h3 class="about-value-title">@v.Title</h3>
+                    <p class="about-value-text">@v.Text</p>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="about-section about-cta">
+        <div class="about-cta-inner">
+            <h2 class="about-cta-title">@content.CtaTitle</h2>
+            <p class="about-cta-text">@content.CtaText</p>
+            <a href="@(string.IsNullOrWhiteSpace(content.CtaButtonUrl) ? "/contact" : content.CtaButtonUrl)" class="btn-about-cta">@content.CtaButtonText</a>
+        </div>
+    </section>
+</div>
+
+@if (showModal)
+{
+    <div class="about-modal-overlay" @onclick="CloseModal">
+        <div class="about-modal-content" @onclick:stopPropagation="true">
+            <div class="about-modal-header">
+                <h2 class="about-modal-title">Edit About Us page content</h2>
+                <button type="button" class="about-modal-close" @onclick="CloseModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="about-modal-body">
+                <form @onsubmit="SaveContent" @onsubmit:preventDefault="true" class="about-edit-form">
+                    @if (!string.IsNullOrEmpty(alertMessage))
+                    {
+                        <div class="alert-message @(saveSuccess ? "alert-success" : "alert-error")">@alertMessage</div>
+                    }
+                    <div class="form-section">
+                        <h3 class="form-section-title">Header</h3>
+                        <div class="form-group"><label>Page title</label><input type="text" @bind="editContent.Title" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>Lead text</label><textarea @bind="editContent.Lead" rows="2" maxlength="500" class="form-control"></textarea></div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title">Our story</h3>
+                        <div class="form-group"><label>Section title</label><input type="text" @bind="editContent.StoryTitle" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>Story text</label><textarea @bind="editContent.StoryText" rows="5" maxlength="2000" class="form-control"></textarea></div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title">Values</h3>
+                        <div class="form-group"><label>Values section title</label><input type="text" @bind="editContent.ValuesTitle" maxlength="100" class="form-control" /></div>
+                        @for (var idx = 0; idx < (editContent.Values ?? new List<ValueCardItem>()).Count; idx++)
+                        {
+                            var index = idx;
+                            <div class="value-card-edit" @key="idx">
+                                <div class="value-card-edit-header">
+                                    <span class="value-card-edit-label">Card @(index + 1)</span>
+                                    <button type="button" class="btn-remove-card" @onclick="() => RemoveValueCard(index)" title="Remove card">Remove</button>
+                                </div>
+                                <div class="form-group"><label>Title</label><input type="text" @bind="editContent.Values[index].Title" maxlength="100" class="form-control" /></div>
+                                <div class="form-group"><label>Text</label><textarea @bind="editContent.Values[index].Text" rows="2" maxlength="500" class="form-control"></textarea></div>
+                            </div>
+                        }
+                        <button type="button" class="btn-add-card" @onclick="AddValueCard">Add card</button>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title">Call to action</h3>
+                        <div class="form-group"><label>CTA title</label><input type="text" @bind="editContent.CtaTitle" maxlength="100" class="form-control" /></div>
+                        <div class="form-group"><label>CTA text</label><input type="text" @bind="editContent.CtaText" maxlength="200" class="form-control" /></div>
+                        <div class="form-group"><label>Button text</label><input type="text" @bind="editContent.CtaButtonText" maxlength="50" class="form-control" /></div>
+                        <div class="form-group"><label>Button URL</label><input type="text" @bind="editContent.CtaButtonUrl" maxlength="500" class="form-control" placeholder="/contact" /></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-save" disabled="@saving">@(saving ? "Saving..." : "Save all")</button>
+                        <button type="button" class="btn-cancel" @onclick="CloseModal" disabled="@saving">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private AboutUsPageContent content = new();
+    private AboutUsPageContent editContent = new();
+    private bool isAdmin;
+    private bool showModal;
+    private bool saving;
+    private string alertMessage = "";
+    private bool saveSuccess;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var role = await sessionStorage.GetItemAsync<string>("adminRole");
+            isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+            content = await adminPanelService.GetAboutUsPageContentAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void OpenEditModal()
+    {
+        editContent = new AboutUsPageContent
+        {
+            Title = content.Title,
+            Lead = content.Lead,
+            StoryTitle = content.StoryTitle,
+            StoryText = content.StoryText,
+            ValuesTitle = content.ValuesTitle,
+            Values = (content.Values ?? new List<ValueCardItem>()).Select(v => new ValueCardItem { Title = v.Title, Text = v.Text }).ToList(),
+            CtaTitle = content.CtaTitle,
+            CtaText = content.CtaText,
+            CtaButtonText = content.CtaButtonText,
+            CtaButtonUrl = content.CtaButtonUrl
+        };
+        alertMessage = "";
+        showModal = true;
+    }
+
+    private void AddValueCard()
+    {
+        editContent.Values ??= new List<ValueCardItem>();
+        editContent.Values.Add(new ValueCardItem { Title = "", Text = "" });
+        StateHasChanged();
+    }
+
+    private void RemoveValueCard(int index)
+    {
+        if (editContent.Values == null || index < 0 || index >= editContent.Values.Count) return;
+        editContent.Values.RemoveAt(index);
+        StateHasChanged();
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        alertMessage = "";
+    }
+
+    private async Task SaveContent()
+    {
+        if (saving) return;
+        saving = true;
+        alertMessage = "";
+        try
+        {
+            var result = await adminPanelService.SetAboutUsPageContentFullAsync(editContent);
+            saveSuccess = result.Success;
+            alertMessage = result.Message;
+            if (result.Success)
+            {
+                content = editContent;
+                CloseModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            saveSuccess = false;
+            alertMessage = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+            StateHasChanged();
+        }
+    }
+}
