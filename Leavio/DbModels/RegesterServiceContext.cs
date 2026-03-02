@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Leavio.DbModels;
 
-public partial class RegesterServiceContext : DbContext
-{
-    public RegesterServiceContext()
+    public partial class RegesterServiceContext : DbContext
     {
-    }
+        public RegesterServiceContext()
+        {
+        }
 
     public RegesterServiceContext(DbContextOptions<RegesterServiceContext> options)
         : base(options)
@@ -20,7 +20,9 @@ public partial class RegesterServiceContext : DbContext
     public virtual DbSet<UserRole> UserRoles { get; set; }
     public virtual DbSet<SystemSettings> SystemSettings { get; set; }
     public virtual DbSet<DailyLoginTracking> DailyLoginTrackings { get; set; }
-    public virtual DbSet<MenuItem> MenuItems { get; set; }
+        public virtual DbSet<MenuItem> MenuItems { get; set; }
+
+        public virtual DbSet<RoleMenuPermission> RoleMenuPermissions { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -179,6 +181,26 @@ public partial class RegesterServiceContext : DbContext
             // Create index on ParentId for efficient queries
             entity.HasIndex(e => e.ParentId)
                 .HasDatabaseName("IX_MenuItem_ParentId");
+        });
+
+        modelBuilder.Entity<RoleMenuPermission>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.ToTable("RoleMenuPermission");
+
+            entity.HasIndex(e => new { e.RoleId, e.MenuItemId })
+                .IsUnique();
+
+            entity.HasOne(d => d.Role)
+                .WithMany()
+                .HasForeignKey(d => d.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.MenuItem)
+                .WithMany()
+                .HasForeignKey(d => d.MenuItemId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         OnModelCreatingPartial(modelBuilder);

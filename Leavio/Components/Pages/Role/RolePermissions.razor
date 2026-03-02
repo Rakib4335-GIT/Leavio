@@ -1,0 +1,314 @@
+@page "/role-permissions/{RoleId:int}"
+@using Leavio.DbModels
+@using Leavio.PanelService
+@using Blazored.SessionStorage
+@using Microsoft.AspNetCore.Components
+
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
+
+<PageTitle>Role Menu Permissions</PageTitle>
+
+@if (isCheckingAuth)
+{
+    <div class="loading-message">
+        <div class="spinner"></div>
+        <p>Checking authorization...</p>
+    </div>
+}
+else if (!isAuthorized)
+{
+    <div class="unauthorized-message">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page. Admin role required.</p>
+        <a href="/">Return to Home</a>
+    </div>
+}
+else
+{
+    <div class="role-permissions-page">
+        <div class="role-permissions-card">
+            <h1 class="page-title">Menu Permissions</h1>
+            <p class="page-subtitle">
+                Assign menu access for role: <strong>@(currentRole?.RoleName ?? "")</strong>
+            </p>
+
+            @if (!string.IsNullOrEmpty(alertMessage))
+            {
+                <div class="alert-message @(isSuccess ? "alert-success" : "alert-error")">
+                    @alertMessage
+                </div>
+            }
+
+            @if (isLoading)
+            {
+                <div class="loading-message">
+                    <p>Loading menus...</p>
+                </div>
+            }
+            else if (topLevelMenus.Any())
+            {
+                <div class="permissions-header">
+                    <div>
+                        <div class="permissions-header-title">Menu access matrix</div>
+                        <div class="permissions-helper">
+                            Check the menus this role can see in the main navigation.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="permissions-table-container">
+                    <table class="permissions-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" @onchange="ToggleAll" checked="@IsAllSelected" />
+                                </th>
+                                <th>Menu</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var parent in topLevelMenus)
+                            {
+                                var parentChecked = selectedMenuIds.Contains(parent.Id);
+                                <tr class="parent-row">
+                                    <td>
+                                        <input type="checkbox"
+                                               checked="@parentChecked"
+                                               @onchange="e => ToggleParent(parent, e.Value is bool b && b)" />
+                                    </td>
+                                    <td>
+                                        <span class="menu-name">@parent.Name</span>
+                                    </td>
+                                </tr>
+
+                                if (parent.Children != null && parent.Children.Any())
+                                {
+                                    foreach (var child in parent.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name))
+                                    {
+                                        var childChecked = selectedMenuIds.Contains(child.Id);
+                                        <tr class="child-row">
+                                            <td>
+                                                <input type="checkbox"
+                                                       checked="@childChecked"
+                                                       @onchange="e => ToggleChild(parent, child, e.Value is bool b && b)" />
+                                            </td>
+                                            <td>
+                                                <span class="child-prefix">↳</span>
+                                                <span class="menu-name">@child.Name</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="permissions-actions">
+                    <button class="btn btn-secondary" @onclick="BackToRoles" disabled="@isProcessing">Back</button>
+                    <button class="btn btn-primary" @onclick="SavePermissions" disabled="@isProcessing">
+                        @(isProcessing ? "Saving..." : "Save Permissions")
+                    </button>
+                </div>
+            }
+            else
+            {
+                <p class="no-roles">No menus found. Please create menus first.</p>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int RoleId { get; set; }
+
+    private Role? currentRole;
+    private bool isAuthorized = false;
+    private bool isCheckingAuth = true;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private string alertMessage = string.Empty;
+    private bool isSuccess = false;
+
+    private List<MenuItem> topLevelMenus = new();
+    private HashSet<int> selectedMenuIds = new();
+
+    private bool IsAllSelected => topLevelMenus.SelectMany(m => FlattenMenu(m)).All(id => selectedMenuIds.Contains(id));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CheckAuthorization();
+            if (isAuthorized)
+            {
+                await LoadData();
+            }
+            isCheckingAuth = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CheckAuthorization()
+    {
+        var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
+        if (string.IsNullOrEmpty(storedUserRole))
+        {
+            isCheckingAuth = false;
+            navigation.NavigateTo("/login");
+            return;
+        }
+
+        isAuthorized = string.Equals(storedUserRole, "Admin", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var roles = await adminPanelService.GetAllRolesAsync();
+            currentRole = roles.FirstOrDefault(r => r.Id == RoleId);
+
+            if (currentRole == null)
+            {
+                alertMessage = "Role not found.";
+                isSuccess = false;
+                return;
+            }
+
+            var allMenus = await adminPanelService.GetAllMenuItemsAsync();
+            topLevelMenus = allMenus
+                .Where(m => m.ParentId == null)
+                .OrderBy(m => m.DisplayOrder)
+                .ThenBy(m => m.Name)
+                .ToList();
+
+            var existingMenuIds = await adminPanelService.GetMenuPermissionsForRoleAsync(RoleId);
+            selectedMenuIds = new HashSet<int>(existingMenuIds);
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error loading data: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IEnumerable<int> FlattenMenu(MenuItem item)
+    {
+        yield return item.Id;
+
+        if (item.Children != null)
+        {
+            foreach (var child in item.Children)
+            {
+                foreach (var id in FlattenMenu(child))
+                {
+                    yield return id;
+                }
+            }
+        }
+    }
+
+    private void ToggleParent(MenuItem parent, bool isChecked)
+    {
+        var ids = FlattenMenu(parent);
+
+        if (isChecked)
+        {
+            foreach (var id in ids)
+            {
+                selectedMenuIds.Add(id);
+            }
+        }
+        else
+        {
+            foreach (var id in ids)
+            {
+                selectedMenuIds.Remove(id);
+            }
+        }
+    }
+
+    private void ToggleChild(MenuItem parent, MenuItem child, bool isChecked)
+    {
+        if (isChecked)
+        {
+            selectedMenuIds.Add(child.Id);
+            selectedMenuIds.Add(parent.Id);
+        }
+        else
+        {
+            selectedMenuIds.Remove(child.Id);
+
+            var anyChildSelected = parent.Children != null &&
+                                   parent.Children.Any(c => selectedMenuIds.Contains(c.Id));
+            if (!anyChildSelected)
+            {
+                selectedMenuIds.Remove(parent.Id);
+            }
+        }
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+
+        if (isChecked)
+        {
+            foreach (var parent in topLevelMenus)
+            {
+                foreach (var id in FlattenMenu(parent))
+                {
+                    selectedMenuIds.Add(id);
+                }
+            }
+        }
+        else
+        {
+            selectedMenuIds.Clear();
+        }
+    }
+
+    private async Task SavePermissions()
+    {
+        if (currentRole == null || isProcessing)
+            return;
+
+        isProcessing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            var response = await adminPanelService.SetMenuPermissionsForRoleAsync(RoleId, selectedMenuIds.ToList());
+            alertMessage = response.Message;
+            isSuccess = response.Success;
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Error saving permissions: {ex.Message}";
+            isSuccess = false;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void BackToRoles()
+    {
+        navigation.NavigateTo("/role-management");
+    }
+}
+

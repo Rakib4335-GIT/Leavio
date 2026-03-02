@@ -1,0 +1,441 @@
+@page "/my-login-tracking"
+@using Leavio.DbModels
+@using Leavio.PanelService
+@using Blazored.SessionStorage
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+
+<PageTitle>My Login Tracking</PageTitle>
+
+<div class="login-tracking-container">
+    <div class="page-header my-profile-header">
+        <div class="profile-avatar-wrapper">
+            @if (!string.IsNullOrWhiteSpace(currentEmployeeProfile?.ProfilePicture))
+            {
+                <img src="@currentEmployeeProfile.ProfilePicture" alt="Profile" class="avatar-image-large" />
+            }
+            else
+            {
+                <div class="avatar-placeholder-large">
+                    @GetInitials(currentEmployeeProfile?.Name ?? employeeDisplayName)
+                </div>
+            }
+        </div>
+        <div class="page-header-text">
+            <h1>My Daily Login Tracking</h1>
+            <p class="subtitle">View your own login and logout times</p>
+        </div>
+    </div>
+
+    <div class="filters-section">
+        <div class="filter-group">
+            <label>Employee Name:</label>
+            <input type="text" class="form-control" value="@employeeDisplayName" disabled />
+        </div>
+
+        <div class="filter-group">
+            <label for="startDateFilter">Start Date:</label>
+            <input type="date" id="startDateFilter" @bind="startDateFilter" class="form-control" />
+        </div>
+
+        <div class="filter-group">
+            <label for="endDateFilter">End Date:</label>
+            <input type="date" id="endDateFilter" @bind="endDateFilter" class="form-control" />
+        </div>
+
+        <div class="filter-actions">
+            <button @onclick="LoadData" class="btn btn-primary" disabled="@isLoading">Filter</button>
+            <button @onclick="ClearFilters" class="btn btn-secondary" disabled="@isLoading">Clear</button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-message">
+            <p>Loading your login tracking data...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            @errorMessage
+        </div>
+    }
+    else if (loginTrackingData == null || !loginTrackingData.Any())
+    {
+        <div class="no-data-message">
+            <p>No login tracking data found.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="login-tracking-table">
+                <thead>
+                    <tr>
+                        <th>SL No.</th>
+                        <th class="sortable" @onclick='() => SortByColumn("Date")'>
+                            Date
+                            @if (sortColumn == "Date")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th class="sortable" @onclick='() => SortByColumn("FirstLoginTime")'>
+                            First Login Time
+                            @if (sortColumn == "FirstLoginTime")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th class="sortable" @onclick='() => SortByColumn("LastLogoutTime")'>
+                            Last Logout Time
+                            @if (sortColumn == "LastLogoutTime")
+                            {
+                                <span class="sort-icon">@(sortDirection == "asc" ? "▲" : "▼")</span>
+                            }
+                            else
+                            {
+                                <span class="sort-icon" style="opacity: 0.3;">⇅</span>
+                            }
+                        </th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in paginatedLoginTrackingData.Select((record, index) => new { record, index }))
+                    {
+                        var serialNumber = (currentPage - 1) * pageSize + item.index + 1;
+                        <tr>
+                            <td>@serialNumber</td>
+                            <td>@item.record.TrackingDate.ToString("yyyy-MM-dd")</td>
+                            <td>@item.record.FirstLoginTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>@(item.record.LastLogoutTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Not logged out")</td>
+                            <td>@GetDuration(item.record.FirstLoginTime, item.record.LastLogoutTime)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (totalPages > 0)
+        {
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing @((currentPage - 1) * pageSize + 1) to @(Math.Min(currentPage * pageSize, totalRecords)) of @totalRecords entries
+                </div>
+                <div class="pagination-controls">
+                    <button @onclick="GoToFirstPage" class="pagination-btn" disabled="@(currentPage == 1 || isLoading)" title="First Page">
+                        &laquo;&laquo;
+                    </button>
+                    <button @onclick="GoToPreviousPage" class="pagination-btn" disabled="@(currentPage == 1 || isLoading)" title="Previous">
+                        &laquo;
+                    </button>
+
+                    @for (int i = startPage; i <= endPage; i++)
+                    {
+                        var pageNum = i;
+                        <button @onclick="() => GoToPage(pageNum)" class="pagination-btn @(currentPage == pageNum ? "active" : "")" disabled="@isLoading">
+                            @pageNum
+                        </button>
+                    }
+
+                    <button @onclick="GoToNextPage" class="pagination-btn" disabled="@(currentPage == totalPages || isLoading)" title="Next">
+                        &raquo;
+                    </button>
+                    <button @onclick="GoToLastPage" class="pagination-btn" disabled="@(currentPage == totalPages || isLoading)" title="Last Page">
+                        &raquo;&raquo;
+                    </button>
+                </div>
+                <div class="pagination-page-size">
+                    <label for="pageSizeSelect">Items per page:</label>
+                    <select id="pageSizeSelect" @bind="pageSize" @bind:after="OnPageSizeChanged" class="page-size-select" disabled="@isLoading">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+        }
+
+        <div class="summary-section">
+            <p><strong>Total Records:</strong> @totalRecords</p>
+        </div>
+    }
+</div>
+
+@code {
+    private List<DailyLoginTracking>? loginTrackingData;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+
+    private DateTime? startDateFilter;
+    private DateTime? endDateFilter;
+
+    private int? currentEmployeeId;
+    private string employeeDisplayId = string.Empty;
+    private string employeeDisplayName = string.Empty;
+    private AdminInfo? currentEmployeeProfile;
+
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private string sortColumn = "Date";
+    private string sortDirection = "desc";
+
+    private int totalPages => (int)Math.Ceiling((double)sortedLoginTrackingData.Count() / pageSize);
+    private int totalRecords => sortedLoginTrackingData.Count();
+    private int startPage => Math.Max(1, currentPage - 2);
+    private int endPage => Math.Min(totalPages, currentPage + 2);
+
+    private IEnumerable<DailyLoginTracking> sortedLoginTrackingData
+    {
+        get
+        {
+            if (loginTrackingData == null || !loginTrackingData.Any())
+                return Enumerable.Empty<DailyLoginTracking>();
+
+            var sorted = loginTrackingData.AsEnumerable();
+
+            switch (sortColumn)
+            {
+                case "Date":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.TrackingDate)
+                        : sorted.OrderByDescending(x => x.TrackingDate);
+                    break;
+                case "FirstLoginTime":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.FirstLoginTime)
+                        : sorted.OrderByDescending(x => x.FirstLoginTime);
+                    break;
+                case "LastLogoutTime":
+                    sorted = sortDirection == "asc"
+                        ? sorted.OrderBy(x => x.LastLogoutTime ?? DateTime.MaxValue)
+                        : sorted.OrderByDescending(x => x.LastLogoutTime ?? DateTime.MinValue);
+                    break;
+            }
+
+            return sorted;
+        }
+    }
+
+    private IEnumerable<DailyLoginTracking> paginatedLoginTrackingData => sortedLoginTrackingData
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await InitializeCurrentEmployeeAsync();
+            if (currentEmployeeId.HasValue)
+            {
+                await LoadData();
+            }
+        }
+    }
+
+    private async Task InitializeCurrentEmployeeAsync()
+    {
+        try
+        {
+            var employeeIdText = await sessionStorage.GetItemAsync<string>("employeeId");
+
+            if (string.IsNullOrWhiteSpace(employeeIdText) || !int.TryParse(employeeIdText, out var employeeIdValue))
+            {
+                errorMessage = "Could not determine the logged-in user. Please log in again.";
+                return;
+            }
+
+            currentEmployeeId = employeeIdValue;
+            employeeDisplayId = employeeIdText;
+            
+            var employeeNameText = await sessionStorage.GetItemAsync<string>("adminName");
+            if (!string.IsNullOrWhiteSpace(employeeNameText))
+            {
+                employeeDisplayName = employeeNameText;
+            }
+            else
+            {
+                employeeDisplayName = employeeDisplayId;
+            }
+
+            var allUsers = await adminPanelService.GetAllUsersAsync();
+            currentEmployeeProfile = allUsers.FirstOrDefault(u => u.Id == currentEmployeeId);
+        }
+        catch (Exception)
+        {
+            errorMessage = "An error occurred while reading your session. Please log in again.";
+        }
+    }
+
+    private async Task LoadData()
+    {
+        if (!currentEmployeeId.HasValue)
+        {
+            if (string.IsNullOrEmpty(errorMessage))
+            {
+                errorMessage = "No logged-in user found. Please log in again.";
+            }
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            if (startDateFilter.HasValue && endDateFilter.HasValue && startDateFilter.Value > endDateFilter.Value)
+            {
+                errorMessage = "Start date cannot be greater than end date.";
+                return;
+            }
+
+            loginTrackingData = await adminPanelService.GetDailyLoginTrackingAsync(
+                currentEmployeeId,
+                startDateFilter,
+                endDateFilter
+            );
+
+            if (currentPage > totalPages && totalPages > 0)
+            {
+                currentPage = totalPages;
+            }
+            else if (totalPages == 0)
+            {
+                currentPage = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading data: {ex.Message}";
+            loginTrackingData = new List<DailyLoginTracking>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        startDateFilter = null;
+        endDateFilter = null;
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private string GetDuration(DateTime firstLogin, DateTime? lastLogout)
+    {
+        if (!lastLogout.HasValue)
+        {
+            return "Still logged in";
+        }
+
+        var duration = lastLogout.Value - firstLogin;
+
+        if (duration.TotalDays >= 1)
+        {
+            return $"{(int)duration.TotalDays} day(s) {duration.Hours} hour(s) {duration.Minutes} minute(s)";
+        }
+        else if (duration.TotalHours >= 1)
+        {
+            return $"{duration.Hours} hour(s) {duration.Minutes} minute(s)";
+        }
+        else
+        {
+            return $"{duration.Minutes} minute(s) {duration.Seconds} second(s)";
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page >= 1 && page <= totalPages && !isLoading)
+        {
+            currentPage = page;
+        }
+    }
+
+    private void GoToNextPage()
+    {
+        if (currentPage < totalPages && !isLoading)
+        {
+            currentPage++;
+        }
+    }
+
+    private void GoToPreviousPage()
+    {
+        if (currentPage > 1 && !isLoading)
+        {
+            currentPage--;
+        }
+    }
+
+    private void GoToFirstPage()
+    {
+        if (currentPage != 1 && !isLoading)
+        {
+            currentPage = 1;
+        }
+    }
+
+    private void GoToLastPage()
+    {
+        if (currentPage != totalPages && totalPages > 0 && !isLoading)
+        {
+            currentPage = totalPages;
+        }
+    }
+
+    private void OnPageSizeChanged()
+    {
+        currentPage = 1;
+    }
+
+    private void SortByColumn(string column)
+    {
+        if (isLoading) return;
+
+        if (sortColumn == column)
+        {
+            sortDirection = sortDirection == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            sortColumn = column;
+            sortDirection = "asc";
+        }
+
+        currentPage = 1;
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "U";
+
+        var parts = name
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(n => char.ToUpperInvariant(n[0]));
+
+        return new string(parts.ToArray());
+    }
+}
+

@@ -56,6 +56,31 @@
                     }
                 }
             </div>
+            <div class="header-role-container">
+                @if (isLoggedIn && availableRoles.Any())
+                {
+                    <div class="role-switcher" @onclick:stopPropagation="true">
+                        <button class="role-pill" @onclick="ToggleRoleMenu">
+                            <span>@currentRole</span>
+                            <svg class="role-arrow @(showRoleMenu ? "open" : "")" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        @if (showRoleMenu)
+                        {
+                            <div class="role-menu">
+                                @foreach (var role in availableRoles)
+                                {
+                                    <button class="role-menu-item @(role == currentRole ? "active" : "")"
+                                            @onclick="() => ChangeRole(role)">
+                                        @role
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
             <div class="header-button">
                 @if (isLoggedIn)
                 {
@@ -127,8 +152,11 @@
     private bool showImageModal = false;
     private bool showMenu = false;
     private bool showUserMenu = false;
+    private bool showRoleMenu = false;
     private List<MenuItem> activeMenuItems = new();
     private HashSet<int> openSubMenus = new();
+    private List<string> availableRoles = new();
+    private string currentRole = "User";
 
     private void ShowImageModal()
     {
@@ -141,12 +169,33 @@
         {
             var storedUserName = await sessionStorage.GetItemAsync<string>("adminName");
             var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
+            var employeeIdStr = await sessionStorage.GetItemAsync<string>("employeeId");
+
             if (!string.IsNullOrEmpty(storedUserName))
             {
                 isLoggedIn = true;
                 userName = storedUserName;
                 userRole = storedUserRole ?? "User";
+                currentRole = userRole;
                 isAdmin = string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
+
+                if (!string.IsNullOrEmpty(employeeIdStr) && int.TryParse(employeeIdStr, out var employeeId))
+                {
+                    var roles = await adminPanelService.GetRolesForEmployeeAsync(employeeId);
+                    availableRoles = roles.Select(r => r.RoleName ?? "").Where(rn => !string.IsNullOrWhiteSpace(rn)).Distinct().ToList();
+
+                    if (!availableRoles.Any())
+                    {
+                        availableRoles.Add(currentRole);
+                    }
+                    else if (!availableRoles.Contains(currentRole))
+                    {
+                        currentRole = availableRoles.First();
+                        userRole = currentRole;
+                        isAdmin = string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
+                        await sessionStorage.SetItemAsync("adminRole", userRole);
+                    }
+                }
             }
             
             await LoadMenuItems();
@@ -158,7 +207,7 @@
     {
         try
         {
-            activeMenuItems = await adminPanelService.GetActiveMenuItemsAsync(isLoggedIn);
+            activeMenuItems = await adminPanelService.GetActiveMenuItemsByRoleAsync(isLoggedIn, userRole);
             StateHasChanged();
         }
         catch (Exception)
@@ -217,6 +266,10 @@
         {
             showUserMenu = false;
         }
+        if (showRoleMenu)
+        {
+            showRoleMenu = false;
+        }
         if (openSubMenus.Any())
         {
             openSubMenus.Clear();
@@ -246,6 +299,27 @@
     private void ToggleUserMenu()
     {
         showUserMenu = !showUserMenu;
+        StateHasChanged();
+    }
+
+    private void ToggleRoleMenu()
+    {
+        showRoleMenu = !showRoleMenu;
+        StateHasChanged();
+    }
+
+    private async Task ChangeRole(string newRole)
+    {
+        if (string.IsNullOrWhiteSpace(newRole) || newRole == currentRole)
+            return;
+
+        currentRole = newRole;
+        userRole = newRole;
+        isAdmin = string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase);
+        showRoleMenu = false;
+
+        await sessionStorage.SetItemAsync("adminRole", userRole);
+        await LoadMenuItems();
         StateHasChanged();
     }
 

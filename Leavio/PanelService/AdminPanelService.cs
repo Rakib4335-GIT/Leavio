@@ -1412,6 +1412,183 @@ namespace Leavio.PanelService
             }
         }
 
+        public async Task<List<DbModels.Role>> GetRolesForEmployeeAsync(int employeeId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                var user = await context.AdminInfos
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == employeeId);
+
+                if (user == null || string.IsNullOrEmpty(user.UserId))
+                {
+                    return new List<DbModels.Role>();
+                }
+
+                var roles = await context.UserRoles
+                    .AsNoTracking()
+                    .Include(ur => ur.Role)
+                    .Where(ur => ur.UserId == user.UserId && ur.Role != null)
+                    .Select(ur => ur.Role!)
+                    .Distinct()
+                    .OrderBy(r => r.RoleName)
+                    .ToListAsync();
+
+                return roles;
+            }
+            catch (Exception)
+            {
+                return new List<DbModels.Role>();
+            }
+        }
+
+        public async Task<List<int>> GetMenuPermissionsForRoleAsync(int roleId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                return await context.RoleMenuPermissions
+                    .AsNoTracking()
+                    .Where(rp => rp.RoleId == roleId)
+                    .Select(rp => rp.MenuItemId)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<int>();
+            }
+        }
+
+        public async Task<ResponseModel> SetMenuPermissionsForRoleAsync(int roleId, List<int> menuItemIds)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                var roleExists = await context.Roles
+                    .AsNoTracking()
+                    .AnyAsync(r => r.Id == roleId);
+                if (!roleExists)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "Role not found."
+                    };
+                }
+
+                var validMenuIds = await context.MenuItems
+                    .AsNoTracking()
+                    .Where(m => menuItemIds.Contains(m.Id))
+                    .Select(m => m.Id)
+                    .ToListAsync();
+
+                var existing = await context.RoleMenuPermissions
+                    .Where(rp => rp.RoleId == roleId)
+                    .ToListAsync();
+
+                context.RoleMenuPermissions.RemoveRange(existing);
+
+                foreach (var menuId in validMenuIds.Distinct())
+                {
+                    context.RoleMenuPermissions.Add(new RoleMenuPermission
+                    {
+                        RoleId = roleId,
+                        MenuItemId = menuId
+                    });
+                }
+
+                await context.SaveChangesAsync();
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = "Menu permissions updated successfully."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel
+                {
+                    Success = false,
+                    Message = $"An error occurred while saving permissions: {ex.Message}"
+                };
+            }
+        }
+
+        public async Task<List<MenuItem>> GetActiveMenuItemsByRoleAsync(bool isAuthenticated, string? roleName)
+        {
+            try
+            {
+                var baseMenus = await GetActiveMenuItemsAsync(isAuthenticated);
+
+                if (!isAuthenticated || string.IsNullOrWhiteSpace(roleName))
+                {
+                    return baseMenus;
+                }
+
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                var role = await context.Roles
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.RoleName == roleName);
+
+                if (role == null)
+                {
+                    return baseMenus;
+                }
+
+                var allowedMenuIds = await context.RoleMenuPermissions
+                    .AsNoTracking()
+                    .Where(rp => rp.RoleId == role.Id)
+                    .Select(rp => rp.MenuItemId)
+                    .ToListAsync();
+
+                if (!allowedMenuIds.Any())
+                {
+                    return new List<MenuItem>();
+                }
+
+                bool IsMenuAllowed(MenuItem item)
+                {
+                    if (allowedMenuIds.Contains(item.Id))
+                        return true;
+
+                    if (item.Children == null || !item.Children.Any())
+                        return false;
+
+                    return item.Children.Any(child => IsMenuAllowed(child));
+                }
+
+                var filteredTopLevel = new List<MenuItem>();
+
+                foreach (var item in baseMenus)
+                {
+                    if (!IsMenuAllowed(item))
+                    {
+                        continue;
+                    }
+
+                    var allowedChildren = item.Children?
+                        .Where(c => IsMenuAllowed(c))
+                        .OrderBy(c => c.DisplayOrder)
+                        .ThenBy(c => c.Name)
+                        .ToList() ?? new List<MenuItem>();
+
+                    item.Children = allowedChildren;
+                    filteredTopLevel.Add(item);
+                }
+
+                return filteredTopLevel;
+            }
+            catch (Exception)
+            {
+                return await GetActiveMenuItemsAsync(isAuthenticated);
+            }
+        }
+
         public async Task<List<MenuItem>> GetParentMenuItemsAsync(int? excludeId = null)
         {
             try

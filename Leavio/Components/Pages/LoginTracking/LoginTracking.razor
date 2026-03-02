@@ -3,16 +3,35 @@
 @using Leavio.PanelService
 @using Microsoft.AspNetCore.Components
 @using Microsoft.JSInterop
+@using Blazored.SessionStorage
 @using System.Text
 @using QuestPDF.Fluent
 @using QuestPDF.Helpers
 @using QuestPDF.Infrastructure
 @inject AdminPanelService adminPanelService
 @inject IJSRuntime JSRuntime
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
 @implements IDisposable
 
 <PageTitle>Login Tracking</PageTitle>
 
+@if (isCheckingAuth)
+{
+    <div class="loading-message">
+        <p>Checking authorization...</p>
+    </div>
+}
+else if (!isAuthorized)
+{
+    <div class="unauthorized-message">
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page.</p>
+        <a href="/">Return to Home</a>
+    </div>
+}
+else
+{
 <div class="login-tracking-container" @onclick="HandlePageClick">
     <div class="page-header">
         <h1>Daily Login Tracking</h1>
@@ -130,7 +149,7 @@
             <table class="login-tracking-table">
                 <thead>
                     <tr>
-                        <th>SL No.</th>
+                        <th>Profile</th>
                         <th class="sortable" @onclick='() => SortByColumn("EmployeeId")'>
                             Employee ID
                             @if (sortColumn == "EmployeeId")
@@ -203,9 +222,22 @@
                 <tbody>
                     @foreach (var item in paginatedLoginTrackingData.Select((record, index) => new { record, index }))
                     {
-                        var serialNumber = (currentPage - 1) * pageSize + item.index + 1;
                         <tr>
-                            <td>@serialNumber</td>
+                            <td>
+                                <div class="avatar-cell" @onclick="() => OpenProfileModal(item.record.Employee)">
+                                    @if (!string.IsNullOrWhiteSpace(item.record.Employee?.ProfilePicture))
+                                    {
+                                        <img src="@item.record.Employee.ProfilePicture" alt="Profile"
+                                             class="avatar-image" />
+                                    }
+                                    else
+                                    {
+                                        <div class="avatar-placeholder">
+                                            @GetInitials(item.record.Employee?.Name)
+                                        </div>
+                                    }
+                                </div>
+                            </td>
                             <td>@(item.record.Employee?.UserId ?? item.record.EmployeeId.ToString())</td>
                             <td>@(item.record.Employee?.Name ?? "N/A")</td>
                             <td>@(item.record.Employee?.Email ?? "N/A")</td>
@@ -218,6 +250,37 @@
                 </tbody>
             </table>
         </div>
+
+        @if (showProfileModal && selectedEmployeeProfile != null)
+        {
+            <div class="modal-overlay" @onclick="CloseProfileModal">
+                <div class="modal-content profile-modal" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h2 class="modal-title">@selectedEmployeeProfile.Name</h2>
+                        <button type="button" class="modal-close" @onclick="CloseProfileModal" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="modal-body profile-modal-body">
+                        <div class="profile-avatar-large">
+                            @if (!string.IsNullOrWhiteSpace(selectedEmployeeProfile.ProfilePicture))
+                            {
+                                <img src="@selectedEmployeeProfile.ProfilePicture" alt="Profile" class="avatar-image-large" />
+                            }
+                            else
+                            {
+                                <div class="avatar-placeholder-large">
+                                    @GetInitials(selectedEmployeeProfile.Name)
+                                </div>
+                            }
+                        </div>
+                        <div class="profile-details">
+                            <p><strong>Employee ID:</strong> @selectedEmployeeProfile.UserId</p>
+                            <p><strong>Name:</strong> @selectedEmployeeProfile.Name</p>
+                            <p><strong>Email:</strong> @selectedEmployeeProfile.Email</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
 
         <!-- Pagination Controls -->
         @if (totalPages > 0)
@@ -284,6 +347,7 @@
         </div>
     }
 </div>
+}
 
 @code {
     private List<DailyLoginTracking>? loginTrackingData;
@@ -310,6 +374,10 @@
     private string sortDirection = "desc";
     private int totalPages => (int)Math.Ceiling((double)sortedLoginTrackingData.Count() / pageSize);
     private int totalRecords => sortedLoginTrackingData.Count();
+    private bool isAuthorized = false;
+    private bool isCheckingAuth = true;
+    private AdminInfo? selectedEmployeeProfile;
+    private bool showProfileModal = false;
     private int startPage => Math.Max(1, currentPage - 2);
     private int endPage => Math.Min(totalPages, currentPage + 2);
     
@@ -366,10 +434,60 @@
         .Skip((currentPage - 1) * pageSize)
         .Take(pageSize);
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await LoadEmployees();
-        await LoadData();
+        if (firstRender)
+        {
+            await CheckAuthorization();
+            if (isAuthorized)
+            {
+                await LoadEmployees();
+                await LoadData();
+
+                // Ensure JavaScript functions are available
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("eval", @"
+                        if (typeof window.downloadFile === 'undefined' || typeof window.openPrintWindow === 'undefined') {
+                            var script = document.createElement('script');
+                            script.src = '/js/reportUtils.js';
+                            script.async = false;
+                            document.head.appendChild(script);
+                        }
+                    ");
+                }
+                catch
+                {
+                    // Script might already be loaded, ignore error
+                }
+            }
+            isCheckingAuth = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CheckAuthorization()
+    {
+        var storedUserName = await sessionStorage.GetItemAsync<string>("adminName");
+        var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
+        var employeeIdStr = await sessionStorage.GetItemAsync<string>("employeeId");
+
+        if (string.IsNullOrEmpty(storedUserName) || string.IsNullOrEmpty(employeeIdStr) || !int.TryParse(employeeIdStr, out var employeeId))
+        {
+            isCheckingAuth = false;
+            navigation.NavigateTo("/login");
+            return;
+        }
+
+        var roleName = storedUserRole ?? "User";
+
+        // Use the same permission logic as the main menu (role-based)
+        var menus = await adminPanelService.GetActiveMenuItemsByRoleAsync(true, roleName);
+        bool hasAccess = menus
+            .SelectMany(m => new[] { m }.Concat(m.Children ?? new List<MenuItem>()))
+            .Any(mi => string.Equals(mi.Url, "/login-tracking", StringComparison.OrdinalIgnoreCase));
+
+        isAuthorized = hasAccess;
     }
     
     private async Task LoadEmployees()
@@ -420,29 +538,6 @@
         employeeSearchText = employee.UserId ?? employee.Id.ToString();
         showEmployeeDropdown = false;
         StateHasChanged();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            // Ensure JavaScript functions are available
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("eval", @"
-                    if (typeof window.downloadFile === 'undefined' || typeof window.openPrintWindow === 'undefined') {
-                        var script = document.createElement('script');
-                        script.src = '/js/reportUtils.js';
-                        script.async = false;
-                        document.head.appendChild(script);
-                    }
-                ");
-            }
-            catch
-            {
-                // Script might already be loaded, ignore error
-            }
-        }
     }
 
     private async Task LoadData()
@@ -894,12 +989,40 @@
         if (string.IsNullOrEmpty(text))
             return string.Empty;
         
-        return text
+            return text
             .Replace("&", "&amp;")
             .Replace("<", "&lt;")
             .Replace(">", "&gt;")
             .Replace("\"", "&quot;")
             .Replace("'", "&#39;");
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "U";
+
+        var parts = name
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(n => char.ToUpperInvariant(n[0]));
+
+        return new string(parts.ToArray());
+    }
+
+    private void OpenProfileModal(AdminInfo? employee)
+    {
+        if (employee == null) return;
+        selectedEmployeeProfile = employee;
+        showProfileModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseProfileModal()
+    {
+        showProfileModal = false;
+        selectedEmployeeProfile = null;
+        StateHasChanged();
     }
 
     // Pagination methods

@@ -32,30 +32,11 @@ else
 {
 <div class="role-management-page">
     <div class="role-management-card">
-        <h1 class="page-title">Role Management</h1>
-
-        <div class="add-role-section">
-            <h2>Add New Role</h2>
-            <form @onsubmit="HandleAddRole" @onsubmit:preventDefault="true" class="role-form">
-                <div class="form-group">
-                    <label for="roleName">Role Name</label>
-                    <input type="text" id="roleName" @bind="newRole.RoleName" placeholder="Enter role name (e.g., Admin, User)" required disabled="@isProcessing" class="form-control" />
-                </div>
-                <div class="form-group">
-                    <label for="roleDescription">Description (Optional)</label>
-                    <textarea id="roleDescription" @bind="newRole.Description" placeholder="Enter role description" disabled="@isProcessing" class="form-control" rows="3"></textarea>
-                </div>
-                <button type="submit" class="btn-add-role" disabled="@isProcessing">
-                    @if (isProcessing)
-                    {
-                        <text>Adding...</text>
-                    }
-                    else
-                    {
-                        <text>Add Role</text>
-                    }
-                </button>
-            </form>
+        <div class="page-header">
+            <h1 class="page-title">Role Management</h1>
+            <button type="button" class="btn-add-role" @onclick="OpenAddRoleModal" disabled="@isProcessing">
+                Add Role
+            </button>
         </div>
 
         @if (!string.IsNullOrEmpty(alertMessage))
@@ -126,7 +107,11 @@ else
                                     <td>@item.role.RoleName</td>
                                     <td>@(item.role.Description ?? "N/A")</td>
                                     <td>
-                                        <button @onclick="() => DeleteRole(item.role.Id)" class="btn-delete" disabled="@isProcessing">Delete</button>
+                                        <div class="role-actions">
+                                            <button @onclick="() => NavigateToRolePermissions(item.role.Id)" class="btn-permissions" disabled="@isProcessing">Permissions</button>
+                                            <button @onclick="() => OpenEditRoleModal(item.role)" class="btn-edit-role" disabled="@isProcessing">Edit</button>
+                                            <button @onclick="() => DeleteRole(item.role.Id)" class="btn-delete" disabled="@isProcessing">Delete</button>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -182,6 +167,56 @@ else
             }
         </div>
 
+        @if (showRoleModal)
+        {
+            <div class="modal-overlay" @onclick="CloseRoleModal">
+                <div class="modal-content" @onclick:stopPropagation="true">
+                    <div class="modal-header">
+                        <h2 class="modal-title">@(editingRole != null ? "Edit Role" : "Add Role")</h2>
+                        <button type="button" class="modal-close" @onclick="CloseRoleModal" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form @onsubmit="HandleSaveRole" @onsubmit:preventDefault="true" class="role-form">
+                            <div class="form-group">
+                                <label for="modalRoleName">Role Name</label>
+                                <input type="text"
+                                       id="modalRoleName"
+                                       @bind="modalRoleName"
+                                       placeholder="Enter role name (e.g., Admin, User)"
+                                       required
+                                       disabled="@isProcessing"
+                                       class="form-control" />
+                            </div>
+                            <div class="form-group">
+                                <label for="modalRoleDescription">Description (Optional)</label>
+                                <textarea id="modalRoleDescription"
+                                          @bind="modalRoleDescription"
+                                          placeholder="Enter role description"
+                                          disabled="@isProcessing"
+                                          class="form-control"
+                                          rows="3"></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn-add-role" disabled="@isProcessing">
+                                    @if (isProcessing)
+                                    {
+                                        <text>@(editingRole != null ? "Saving..." : "Adding...")</text>
+                                    }
+                                    else
+                                    {
+                                        <text>@(editingRole != null ? "Save Changes" : "Add Role")</text>
+                                    }
+                                </button>
+                                <button type="button" class="btn-cancel-role" @onclick="CloseRoleModal" disabled="@isProcessing">
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+
         <div class="back-link">
             <a href="/">Back to Home</a>
         </div>
@@ -191,13 +226,16 @@ else
 
 @code {
     private List<DbModels.Role> roles = new();
-    private DbModels.Role newRole = new();
+    private DbModels.Role? editingRole = null;
+    private string modalRoleName = string.Empty;
+    private string? modalRoleDescription = string.Empty;
     private string alertMessage = string.Empty;
     private bool isProcessing = false;
     private bool isSuccess = false;
     private bool isAuthorized = false;
     private bool isCheckingAuth = true;
     private bool registrationEnabled = true;
+    private bool showRoleModal = false;
     
     // Pagination variables
     private int currentPage = 1;
@@ -338,12 +376,11 @@ else
         }
     }
 
-    private async Task HandleAddRole()
+    private async Task HandleSaveRole()
     {
         if (isProcessing) return;
 
-        // Validation
-        if (string.IsNullOrWhiteSpace(newRole.RoleName))
+        if (string.IsNullOrWhiteSpace(modalRoleName))
         {
             alertMessage = "Role name is required.";
             isSuccess = false;
@@ -351,15 +388,10 @@ else
             return;
         }
 
-        // Trim whitespace
-        newRole.RoleName = newRole.RoleName.Trim();
-        if (!string.IsNullOrWhiteSpace(newRole.Description))
-        {
-            newRole.Description = newRole.Description.Trim();
-        }
+        modalRoleName = modalRoleName.Trim();
+        modalRoleDescription = modalRoleDescription?.Trim();
 
-        // Validate role name length
-        if (newRole.RoleName.Length > 50)
+        if (modalRoleName.Length > 50)
         {
             alertMessage = "Role name cannot exceed 50 characters.";
             isSuccess = false;
@@ -367,8 +399,7 @@ else
             return;
         }
 
-        // Validate description length
-        if (!string.IsNullOrWhiteSpace(newRole.Description) && newRole.Description.Length > 500)
+        if (!string.IsNullOrWhiteSpace(modalRoleDescription) && modalRoleDescription.Length > 500)
         {
             alertMessage = "Description cannot exceed 500 characters.";
             isSuccess = false;
@@ -384,38 +415,61 @@ else
         {
             using var context = await contextFactory.CreateDbContextAsync();
 
-            // Check if role name already exists
             var existingRole = await context.Roles
                 .AsNoTracking()
-                .FirstOrDefaultAsync(r => r.RoleName.ToLower() == newRole.RoleName.ToLower());
+                .FirstOrDefaultAsync(r =>
+                    r.RoleName.ToLower() == modalRoleName.ToLower() &&
+                    (editingRole == null || r.Id != editingRole.Id));
             if (existingRole != null)
             {
                 alertMessage = "A role with this name already exists.";
                 isSuccess = false;
-                isProcessing = false;
-                StateHasChanged();
                 return;
             }
 
-            await context.Roles.AddAsync(newRole);
-            await context.SaveChangesAsync();
+            if (editingRole == null)
+            {
+                var newRole = new DbModels.Role
+                {
+                    RoleName = modalRoleName,
+                    Description = modalRoleDescription
+                };
 
-            // Invalidate roles cache
+                await context.Roles.AddAsync(newRole);
+                await context.SaveChangesAsync();
+
+                alertMessage = "Role added successfully!";
+            }
+            else
+            {
+                var role = await context.Roles.FirstOrDefaultAsync(r => r.Id == editingRole.Id);
+                if (role == null)
+                {
+                    alertMessage = "Role not found.";
+                    isSuccess = false;
+                    return;
+                }
+
+                role.RoleName = modalRoleName;
+                role.Description = modalRoleDescription;
+                await context.SaveChangesAsync();
+
+                alertMessage = "Role updated successfully!";
+            }
+
             AdminPanelService.InvalidateRolesCache();
 
-            alertMessage = "Role added successfully!";
             isSuccess = true;
-            newRole = new DbModels.Role();
+            showRoleModal = false;
             await LoadRoles();
-            // Go to last page to see the newly added role
-            if (totalPages > 0)
+            if (totalPages > 0 && editingRole == null)
             {
                 currentPage = totalPages;
             }
         }
         catch (Exception ex)
         {
-            alertMessage = $"Error adding role: {ex.Message}";
+            alertMessage = $"Error saving role: {ex.Message}";
             isSuccess = false;
         }
         finally
@@ -551,6 +605,45 @@ else
 
         // Reset to first page when sorting changes
         currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void NavigateToRolePermissions(int roleId)
+    {
+        if (!isProcessing)
+        {
+            navigation.NavigateTo($"/role-permissions/{roleId}");
+        }
+    }
+
+    private void OpenAddRoleModal()
+    {
+        if (isProcessing) return;
+
+        editingRole = null;
+        modalRoleName = string.Empty;
+        modalRoleDescription = string.Empty;
+        showRoleModal = true;
+    }
+
+    private void OpenEditRoleModal(DbModels.Role role)
+    {
+        if (isProcessing) return;
+
+        editingRole = role;
+        modalRoleName = role.RoleName ?? string.Empty;
+        modalRoleDescription = role.Description ?? string.Empty;
+        showRoleModal = true;
+    }
+
+    private void CloseRoleModal()
+    {
+        if (isProcessing) return;
+
+        showRoleModal = false;
+        editingRole = null;
+        modalRoleName = string.Empty;
+        modalRoleDescription = string.Empty;
         StateHasChanged();
     }
 }
