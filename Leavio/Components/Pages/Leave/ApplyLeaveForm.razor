@@ -1,0 +1,393 @@
+@using Leavio.DbModels
+@using Leavio.PanelService
+@using Blazored.SessionStorage
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
+
+@if (isLoading)
+{
+    <div class="leave-loading">Loading leave details...</div>
+}
+else if (currentUser == null)
+{
+    <div class="leave-error">Unable to load user details.</div>
+}
+else
+{
+    <div class="@(EmbedInModal ? "leave-page leave-page--modal" : "leave-page")">
+        @if (!EmbedInModal)
+        {
+            <div class="leave-header">
+                <h1>Leave Application</h1>
+                <p>Apply for leave and check your remaining balance.</p>
+            </div>
+        }
+
+        <div class="leave-balance-grid">
+            @foreach (var balance in leaveBalances)
+            {
+                var pending = GetPendingDays(balance.LeaveTypeId);
+                var remaining = Math.Max(0, balance.TotalAllocatedDays - balance.UsedDays - pending);
+                <div class="leave-balance-card">
+                    <h3>@balance.LeaveType.Name</h3>
+                    <p><strong>Allocated:</strong> @(balance.TotalAllocatedDays.ToString("0.##")) day(s)</p>
+                    <p><strong>Approved Used:</strong> @(balance.UsedDays.ToString("0.##")) day(s)</p>
+                    <p><strong>Pending:</strong> @(pending.ToString("0.##")) day(s)</p>
+                    <p><strong>Remaining:</strong> @(remaining.ToString("0.##")) day(s)</p>
+                    <p><strong>Valid Until:</strong> @balance.ValidTo.ToString("dd MMM yyyy")</p>
+                </div>
+            }
+        </div>
+
+        <div class="leave-form-card">
+            <h2>Apply for Leave</h2>
+
+            @if (!string.IsNullOrWhiteSpace(alertMessage))
+            {
+                <div class="alert-message @(isSuccess ? "alert-success" : "alert-error")">@alertMessage</div>
+            }
+
+            <form @onsubmit="SubmitLeaveApplication" @onsubmit:preventDefault="true" class="leave-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" value="@currentUser.Name" disabled />
+                    </div>
+                    <div class="form-group">
+                        <label>ID</label>
+                        <input type="text" value="@currentUser.UserId" disabled />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="text" value="@currentUser.Email" disabled />
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="text" value="@currentUser.PhoneNumber" disabled />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="@LeaveTypeSelectId">Leave Type</label>
+                        <select id="@LeaveTypeSelectId" @bind="selectedLeaveTypeId" @bind:after="OnLeaveInputChanged" required disabled="@isSubmitting">
+                            <option value="0">-- Select leave type --</option>
+                            @foreach (var leaveType in leaveTypes)
+                            {
+                                <option value="@leaveType.Id">@leaveType.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Duration</label>
+                        <input type="text" value="@(durationDays > 0 ? $"{durationDays:0.##} day(s)" : "Invalid date range")" disabled />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="@StartDateId">Start Date</label>
+                        <input type="date"
+                               id="@StartDateId"
+                               @bind="startDate"
+                               @bind:after="OnLeaveInputChanged"
+                               min="@startDateMin"
+                               max="@startDateMax"
+                               required
+                               disabled="@isSubmitting" />
+                    </div>
+                    <div class="form-group">
+                        <label for="@EndDateId">End Date</label>
+                        <input type="date"
+                               id="@EndDateId"
+                               @bind="endDate"
+                               @bind:after="OnLeaveInputChanged"
+                               min="@endDateMin"
+                               max="@endDateMax"
+                               required
+                               disabled="@isSubmitting" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="@ReasonId">Reason for Leave</label>
+                    <textarea id="@ReasonId" @bind="reason" rows="4" maxlength="2000" required disabled="@isSubmitting"></textarea>
+                </div>
+
+                @if (isSupportingDocumentRequired)
+                {
+                    <div class="form-group">
+                        <label for="@SupportingDocId">
+                            Supporting Document <span class="required-mark">*</span>
+                        </label>
+                        <InputFile id="@SupportingDocId" OnChange="HandleDocumentSelection" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" disabled="@isSubmitting" />
+                        @if (!string.IsNullOrWhiteSpace(selectedDocumentName))
+                        {
+                            <small class="help-text">Selected: @selectedDocumentName</small>
+                        }
+                        <small class="help-text required-note">Required: Sick Leave longer than 1 day must include a document.</small>
+                    </div>
+                }
+
+                <div class="form-actions">
+                    <button type="submit" disabled="@isSubmitting">
+                        @(isSubmitting ? "Submitting..." : "Submit Leave Application")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool EmbedInModal { get; set; }
+
+    [Parameter] public EventCallback OnSubmittedSuccessfully { get; set; }
+
+    private string LeaveTypeSelectId => EmbedInModal ? "leaveType-modal" : "leaveType";
+    private string StartDateId => EmbedInModal ? "startDate-modal" : "startDate";
+    private string EndDateId => EmbedInModal ? "endDate-modal" : "endDate";
+    private string ReasonId => EmbedInModal ? "reason-modal" : "reason";
+    private string SupportingDocId => EmbedInModal ? "supportingDocument-modal" : "supportingDocument";
+
+    private AdminInfo? currentUser;
+    private List<LeaveType> leaveTypes = new();
+    private List<LeaveBalance> leaveBalances = new();
+    private List<LeaveApplication> myLeaveHistory = new();
+    private int selectedLeaveTypeId;
+    private DateTime startDate = DateTime.Today;
+    private DateTime endDate = DateTime.Today;
+    private string reason = string.Empty;
+    private IBrowserFile? selectedDocument;
+    private string selectedDocumentName = string.Empty;
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private bool isSuccess;
+    private string alertMessage = string.Empty;
+    private int employeeId;
+
+    private decimal durationDays => startDate.Date <= endDate.Date
+        ? (decimal)(endDate.Date - startDate.Date).TotalDays + 1
+        : 0;
+
+    private LeaveType? selectedLeaveType => leaveTypes.FirstOrDefault(x => x.Id == selectedLeaveTypeId);
+
+    private bool isSickLeaveSelected =>
+        string.Equals(selectedLeaveType?.Name, "Sick Leave", StringComparison.OrdinalIgnoreCase);
+
+    private bool isSupportingDocumentRequired =>
+        isSickLeaveSelected && durationDays > 1;
+
+    private string? startDateMin => isSickLeaveSelected ? null : DateTime.Today.ToString("yyyy-MM-dd");
+    private string? endDateMin => isSickLeaveSelected ? null : DateTime.Today.ToString("yyyy-MM-dd");
+    private string? startDateMax => isSickLeaveSelected ? DateTime.Today.ToString("yyyy-MM-dd") : null;
+    private string? endDateMax => isSickLeaveSelected ? DateTime.Today.ToString("yyyy-MM-dd") : null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadPageData();
+        StateHasChanged();
+    }
+
+    private async Task LoadPageData()
+    {
+        isLoading = true;
+        alertMessage = string.Empty;
+        try
+        {
+            var employeeIdRaw = await sessionStorage.GetItemAsync<string>("employeeId");
+            if (string.IsNullOrWhiteSpace(employeeIdRaw) || !int.TryParse(employeeIdRaw, out employeeId))
+            {
+                navigation.NavigateTo("/login");
+                return;
+            }
+
+            var users = await adminPanelService.GetAllUsersAsync();
+            currentUser = users.FirstOrDefault(u => u.Id == employeeId);
+            if (currentUser == null)
+            {
+                navigation.NavigateTo("/login");
+                return;
+            }
+
+            leaveTypes = await adminPanelService.GetActiveLeaveTypesForEmployeeAsync(employeeId);
+            leaveBalances = await adminPanelService.GetLeaveBalancesForEmployeeAsync(employeeId);
+            myLeaveHistory = await adminPanelService.GetLeaveApplicationsForEmployeeAsync(employeeId);
+
+            if (!leaveTypes.Any(x => x.Id == selectedLeaveTypeId))
+            {
+                selectedLeaveTypeId = 0;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private Task OnLeaveInputChanged()
+    {
+        if (isSickLeaveSelected)
+        {
+            if (startDate.Date > DateTime.Today)
+                startDate = DateTime.Today;
+            if (endDate.Date > DateTime.Today)
+                endDate = DateTime.Today;
+        }
+        else
+        {
+            if (startDate.Date < DateTime.Today)
+                startDate = DateTime.Today;
+            if (endDate.Date < DateTime.Today)
+                endDate = DateTime.Today;
+        }
+
+        if (endDate.Date < startDate.Date)
+            endDate = startDate.Date;
+
+        if (!isSupportingDocumentRequired && selectedDocument != null)
+        {
+            selectedDocument = null;
+            selectedDocumentName = string.Empty;
+        }
+        return Task.CompletedTask;
+    }
+
+    private void HandleDocumentSelection(InputFileChangeEventArgs e)
+    {
+        selectedDocument = e.File;
+        selectedDocumentName = selectedDocument?.Name ?? string.Empty;
+    }
+
+    private decimal GetPendingDays(int leaveTypeId)
+    {
+        return myLeaveHistory
+            .Where(x => x.LeaveTypeId == leaveTypeId && string.Equals(x.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+            .Sum(x => x.DurationDays);
+    }
+
+    private async Task SubmitLeaveApplication()
+    {
+        if (isSubmitting) return;
+
+        if (selectedLeaveTypeId <= 0)
+        {
+            isSuccess = false;
+            alertMessage = "Please select a leave type.";
+            return;
+        }
+
+        if (startDate.Date > endDate.Date)
+        {
+            isSuccess = false;
+            alertMessage = "Start date cannot be after end date.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            isSuccess = false;
+            alertMessage = "Reason is required.";
+            return;
+        }
+
+        if (isSupportingDocumentRequired && selectedDocument == null)
+        {
+            isSuccess = false;
+            alertMessage = "Supporting document is required for multi-day sick leave.";
+            return;
+        }
+
+        isSubmitting = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        string? savedDocumentPath = null;
+
+        try
+        {
+            if (selectedDocument != null)
+            {
+                savedDocumentPath = await SaveSupportingDocumentAsync(selectedDocument);
+            }
+
+            var response = await adminPanelService.ApplyLeaveAsync(
+                employeeId,
+                selectedLeaveTypeId,
+                startDate,
+                endDate,
+                reason,
+                savedDocumentPath);
+
+            isSuccess = response.Success;
+            alertMessage = response.Message;
+
+            if (response.Success)
+            {
+                selectedLeaveTypeId = 0;
+                reason = string.Empty;
+                selectedDocument = null;
+                selectedDocumentName = string.Empty;
+                startDate = DateTime.Today;
+                endDate = DateTime.Today;
+                await LoadPageData();
+                if (OnSubmittedSuccessfully.HasDelegate)
+                    await OnSubmittedSuccessfully.InvokeAsync();
+            }
+            else if (!string.IsNullOrWhiteSpace(savedDocumentPath))
+            {
+                DeleteSavedDocument(savedDocumentPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            alertMessage = $"An error occurred: {ex.Message}";
+            if (!string.IsNullOrWhiteSpace(savedDocumentPath))
+            {
+                DeleteSavedDocument(savedDocumentPath);
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task<string> SaveSupportingDocumentAsync(IBrowserFile file)
+    {
+        var maxFileSize = 10 * 1024 * 1024;
+        if (file.Size > maxFileSize)
+            throw new InvalidOperationException("Document size must be less than 10MB.");
+
+        var documentsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Images", "LeaveDocuments");
+        if (!Directory.Exists(documentsDirectory))
+        {
+            Directory.CreateDirectory(documentsDirectory);
+        }
+
+        var extension = Path.GetExtension(file.Name);
+        var safeFileName = $"{employeeId}_{DateTime.Now:yyyyMMddHHmmssfff}{extension}";
+        var fullPath = Path.Combine(documentsDirectory, safeFileName);
+        var relativePath = $"/Images/LeaveDocuments/{safeFileName}";
+
+        await using var stream = File.Create(fullPath);
+        await file.OpenReadStream(maxFileSize).CopyToAsync(stream);
+        return relativePath;
+    }
+
+    private void DeleteSavedDocument(string relativePath)
+    {
+        var normalized = relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", normalized);
+        if (File.Exists(fullPath))
+        {
+            File.Delete(fullPath);
+        }
+    }
+}

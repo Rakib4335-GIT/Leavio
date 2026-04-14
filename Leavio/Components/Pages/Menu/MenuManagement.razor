@@ -116,7 +116,7 @@ else
                                     <td>
                                         @if (!string.IsNullOrEmpty(item.menu.Icon))
                                         {
-                                            <span class="icon-preview">@item.menu.Icon</span>
+                                            <span class="icon-preview"><MenuIconDisplay Icon="@item.menu.Icon" /></span>
                                         }
                                         else
                                         {
@@ -229,7 +229,7 @@ else
                                 <div class="form-group">
                                     <label for="menuIcon">Icon (Optional)</label>
                                     <input type="text" id="menuIcon" @bind="menuIcon" placeholder="Enter icon class or SVG path" disabled="@isProcessing" class="form-control" />
-                                    <small class="form-hint">e.g., "fa fa-home" or SVG path</small>
+                                    <small class="form-hint">e.g. <code>fa-solid fa-id-card</code> or legacy <code>fa fa-id-card</code>, or paste SVG or HTML icon markup</small>
                                 </div>
                                 <div class="form-group">
                                     <label for="displayOrder">Display Order</label>

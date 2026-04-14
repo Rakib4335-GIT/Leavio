@@ -1,0 +1,33 @@
+@* Renders DB menu Icon: raw HTML (e.g. SVG) or Font Awesome class string (e.g. fa-solid fa-id-card). *@
+@if (!string.IsNullOrWhiteSpace(Icon))
+{
+    if (IsMarkup(Icon))
+    {
+        @((MarkupString)Icon.Trim())
+    }
+    else
+    {
+        <i class="@NormalizeFaClasses(Icon)" aria-hidden="true"></i>
+    }
+}
+
+@code {
+    [Parameter] public string? Icon { get; set; }
+
+    private static bool IsMarkup(string icon) => icon.TrimStart().StartsWith('<');
+
+    /// <summary>Maps legacy "fa fa-name" (Font Awesome 4 style) to FA6 "fa-solid fa-name".</summary>
+    private static string NormalizeFaClasses(string icon)
+    {
+        var s = icon.Trim();
+        var parts = s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length >= 2
+            && parts[0].Equals("fa", StringComparison.OrdinalIgnoreCase)
+            && parts[1].StartsWith("fa-", StringComparison.OrdinalIgnoreCase))
+        {
+            return "fa-solid " + string.Join(" ", parts.Skip(1));
+        }
+
+        return s;
+    }
+}

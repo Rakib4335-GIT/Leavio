@@ -1,0 +1,264 @@
+@page "/employee-info"
+@using Leavio.DbModels
+@using Leavio.Models
+@using Leavio.PanelService
+@using Blazored.SessionStorage
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+
+<PageTitle>Employee Info</PageTitle>
+
+@if (isLoading)
+{
+    <div class="lm-loading">Loading employee info...</div>
+}
+else if (!isAuthorized)
+{
+    <div class="lm-unauthorized">
+        <h2>Access Denied</h2>
+        <p>Admin role is required to assign employment categories.</p>
+        <a href="/">Return to Home</a>
+    </div>
+}
+else
+{
+    <div class="lm-page">
+        <div class="lm-header">
+            <h1>Employee Info</h1>
+            <p>Assign employment types, review leave balances, and set each employee’s leave valid-until date for the current period.</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(alertMessage))
+        {
+            <div class="lm-alert @(isSuccess ? "lm-alert-success" : "lm-alert-error")">@alertMessage</div>
+        }
+
+        <section class="lm-section">
+            <h2>Employee employment category</h2>
+            <p class="lm-sub">Adjust employment, review balances for each leave type, set valid until, then save the row.</p>
+
+            <div class="lm-table-wrap">
+                <table class="lm-table lm-table-employee">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Employment</th>
+                            @foreach (var lt in leaveTypeColumns)
+                            {
+                                <th class="lm-num ei-leave-th" title="@lt.Name">
+                                    @lt.Name
+                                    <span class="ei-th-sub">remaining</span>
+                                </th>
+                            }
+                            <th>Valid until</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in employees.OrderBy(x => x.Name))
+                        {
+                            <tr>
+                                <td>@u.Name</td>
+                                <td>@u.Email</td>
+                                <td>
+                                    <select class="lm-select" @bind="employmentSelections[u.Id]" disabled="@(savingRowId == u.Id)">
+                                        @foreach (var et in employmentTypeRows.Where(x => x.Id > 0).OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name))
+                                        {
+                                            <option value="@et.Id">@et.Name</option>
+                                        }
+                                    </select>
+                                </td>
+                                @foreach (var lt in leaveTypeColumns)
+                                {
+                                    var line = GetBalanceLine(u.Id, lt.Id);
+                                    <td class="lm-num ei-leave-cell">
+                                        @if (line != null)
+                                        {
+                                            <span class="ei-rem">@line.RemainingDays.ToString("0.##")</span>
+                                            <span class="ei-sub">@line.AllocatedDays.ToString("0.##") alloc · @line.UsedDays.ToString("0.##") used</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="ei-na">—</span>
+                                        }
+                                    </td>
+                                }
+                                <td>
+                                    <div class="ei-valid-wrap">
+                                        <button type="button" class="ei-step-btn" @onclick="() => ShiftValidUntil(u.Id, -1)" disabled="@(savingRowId == u.Id)" title="One day earlier">−</button>
+                                        <input class="ei-date-input" type="date" value="@GetValidUntilInput(u.Id)" @onchange="e => OnValidUntilChanged(u.Id, e)" disabled="@(savingRowId == u.Id)" />
+                                        <button type="button" class="ei-step-btn" @onclick="() => ShiftValidUntil(u.Id, 1)" disabled="@(savingRowId == u.Id)" title="One day later">+</button>
+                                    </div>
+                                </td>
+                                <td>
+                                    <button type="button" class="lm-btn lm-btn-sm lm-btn-primary" @onclick="() => SaveRow(u.Id)" disabled="@(savingRowId == u.Id)">
+                                        @(savingRowId == u.Id ? "Saving..." : "Save")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isAuthorized;
+    private int? savingRowId;
+    private bool isSuccess;
+    private string alertMessage = string.Empty;
+
+    private List<EmploymentTypeManagementItem> employmentTypeRows = new();
+    private List<AdminInfo> employees = new();
+    private Dictionary<int, int> employmentSelections = new();
+    private Dictionary<int, EmployeeLeaveSummaryDto> leaveSummaries = new();
+    private Dictionary<int, DateTime> validUntilSelections = new();
+    private List<LeaveTypeColumn> leaveTypeColumns = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadPageAsync();
+        StateHasChanged();
+    }
+
+    private EmployeeLeaveSummaryDto GetSummary(int employeeId)
+    {
+        if (leaveSummaries.TryGetValue(employeeId, out var s))
+            return s;
+        return new EmployeeLeaveSummaryDto { EmployeeId = employeeId };
+    }
+
+    private EmployeeLeaveTypeBalanceDto? GetBalanceLine(int employeeId, int leaveTypeId)
+    {
+        if (!leaveSummaries.TryGetValue(employeeId, out var s))
+            return null;
+        return s.LeaveTypes.FirstOrDefault(x => x.LeaveTypeId == leaveTypeId);
+    }
+
+    private string GetValidUntilInput(int employeeId)
+    {
+        if (validUntilSelections.TryGetValue(employeeId, out var d))
+            return d.ToString("yyyy-MM-dd");
+        return "";
+    }
+
+    private void OnValidUntilChanged(int employeeId, ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        if (DateTime.TryParse(raw, out var dt))
+            validUntilSelections[employeeId] = dt.Date;
+    }
+
+    private void ShiftValidUntil(int employeeId, int days)
+    {
+        if (!validUntilSelections.TryGetValue(employeeId, out var d))
+            return;
+        validUntilSelections[employeeId] = d.Date.AddDays(days);
+    }
+
+    private async Task LoadPageAsync()
+    {
+        isLoading = true;
+        alertMessage = string.Empty;
+
+        var role = await sessionStorage.GetItemAsync<string>("adminRole");
+        isAuthorized = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAuthorized)
+        {
+            isLoading = false;
+            return;
+        }
+
+        try
+        {
+            var empTypes = await adminPanelService.GetEmploymentTypesForManagementAsync();
+            employmentTypeRows = empTypes.Select(e => new EmploymentTypeManagementItem
+            {
+                Id = e.Id,
+                Name = e.Name,
+                DisplayOrder = e.DisplayOrder,
+                IsActive = e.IsActive
+            }).ToList();
+
+            employees = await adminPanelService.GetAllUsersAsync();
+            employmentSelections = employees.ToDictionary(e => e.Id, e => e.EmploymentTypeId);
+
+            var leaveTypes = await adminPanelService.GetLeaveTypesForManagementAsync();
+            leaveTypeColumns = leaveTypes
+                .Where(t => t.IsActive)
+                .OrderBy(t => t.DisplayOrder)
+                .ThenBy(t => t.Name)
+                .Select(t => new LeaveTypeColumn(t.Id, t.Name))
+                .ToList();
+
+            var summaries = await adminPanelService.GetEmployeeLeaveSummariesForAdminAsync();
+            leaveSummaries = summaries.ToDictionary(s => s.EmployeeId);
+            validUntilSelections = summaries.ToDictionary(s => s.EmployeeId, s => s.ValidTo.Date);
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            alertMessage = $"Failed to load: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveRow(int employeeId)
+    {
+        if (savingRowId.HasValue) return;
+        savingRowId = employeeId;
+        alertMessage = string.Empty;
+        isSuccess = false;
+
+        try
+        {
+            if (!employmentSelections.TryGetValue(employeeId, out var empTypeId))
+                return;
+
+            if (!validUntilSelections.TryGetValue(employeeId, out var validUntil))
+            {
+                alertMessage = "Set a valid until date before saving.";
+                return;
+            }
+
+            var result = await adminPanelService.UpdateEmployeeInfoRowAsync(employeeId, empTypeId, validUntil);
+            isSuccess = result.Success;
+            alertMessage = result.Message;
+
+            if (result.Success)
+            {
+                var leaveTypes = await adminPanelService.GetLeaveTypesForManagementAsync();
+                leaveTypeColumns = leaveTypes
+                    .Where(t => t.IsActive)
+                    .OrderBy(t => t.DisplayOrder)
+                    .ThenBy(t => t.Name)
+                    .Select(t => new LeaveTypeColumn(t.Id, t.Name))
+                    .ToList();
+
+                var summaries = await adminPanelService.GetEmployeeLeaveSummariesForAdminAsync();
+                leaveSummaries = summaries.ToDictionary(s => s.EmployeeId);
+                validUntilSelections = summaries.ToDictionary(s => s.EmployeeId, s => s.ValidTo.Date);
+            }
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            alertMessage = ex.Message;
+        }
+        finally
+        {
+            savingRowId = null;
+        }
+    }
+
+    private sealed record LeaveTypeColumn(int Id, string Name);
+}

@@ -1,0 +1,239 @@
+@page "/leave-approvals"
+@using Leavio.DbModels
+@using Leavio.PanelService
+@using Blazored.SessionStorage
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
+
+<PageTitle>Leave Approvals</PageTitle>
+
+@if (isLoading)
+{
+    <div class="approval-loading">Loading leave applications...</div>
+}
+else if (!isAuthorized)
+{
+    <div class="approval-unauthorized">
+        <h2>Access Denied</h2>
+        <p>Admin or Higher Authority role is required to review leave applications.</p>
+    </div>
+}
+else
+{
+    <div class="approval-page">
+        <div class="approval-header">
+            <h1>Leave Approvals</h1>
+            <p>Review all user leave applications and update their status.</p>
+        </div>
+
+        <div class="summary-cards">
+            <div class="summary-card pending">
+                <h3>Pending</h3>
+                <p>@leaveApplications.Count(x => x.Status == "Pending")</p>
+            </div>
+            <div class="summary-card approved">
+                <h3>Approved</h3>
+                <p>@leaveApplications.Count(x => x.Status == "Approved")</p>
+            </div>
+            <div class="summary-card rejected">
+                <h3>Rejected</h3>
+                <p>@leaveApplications.Count(x => x.Status == "Rejected")</p>
+            </div>
+        </div>
+
+        <div class="approval-filter-row">
+            <label for="statusFilter">Filter by status</label>
+            <select id="statusFilter" @bind="selectedStatusFilter">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+            </select>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(alertMessage))
+        {
+            <div class="alert-message @(isSuccess ? "alert-success" : "alert-error")">@alertMessage</div>
+        }
+
+        @if (filteredApplications.Any())
+        {
+            <div class="approval-table-wrapper">
+                <table class="approval-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Leave Type</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Duration</th>
+                            <th>Reason</th>
+                            <th>Document</th>
+                            <th>Status</th>
+                            <th>Review Notes</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var app in filteredApplications)
+                        {
+                            <tr>
+                                <td>@app.Employee?.Name (@app.Employee?.UserId)</td>
+                                <td>@app.Employee?.Email</td>
+                                <td>@app.LeaveType?.Name</td>
+                                <td>@app.StartDate.ToString("dd MMM yyyy")</td>
+                                <td>@app.EndDate.ToString("dd MMM yyyy")</td>
+                                <td>@app.DurationDays:0.## day(s)</td>
+                                <td>@app.Reason</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(app.SupportingDocumentPath))
+                                    {
+                                        <a href="@app.SupportingDocumentPath" target="_blank" rel="noopener noreferrer">View</a>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="status-badge @GetStatusClass(app.Status)">@app.Status</span>
+                                </td>
+                                <td>
+                                    <textarea rows="2"
+                                              placeholder="Add comments"
+                                              @bind="reviewComments[app.Id]"
+                                              disabled="@(isReviewing || !string.Equals(app.Status, "Pending", StringComparison.OrdinalIgnoreCase))"></textarea>
+                                </td>
+                                <td>
+                                    @if (string.Equals(app.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <div class="action-buttons">
+                                            <button class="btn-approve" @onclick="() => ReviewApplication(app.Id, true)" disabled="@isReviewing">Approve</button>
+                                            <button class="btn-reject" @onclick="() => ReviewApplication(app.Id, false)" disabled="@isReviewing">Reject</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <small>Reviewed @(app.ReviewedOn.HasValue ? app.ReviewedOn.Value.ToString("dd MMM yyyy HH:mm") : "")</small>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="approval-empty">No leave applications found for this filter.</div>
+        }
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isAuthorized;
+    private bool isReviewing;
+    private bool isSuccess;
+    private string alertMessage = string.Empty;
+    private string selectedStatusFilter = "All";
+    private int reviewerEmployeeId;
+    private string reviewerRole = string.Empty;
+    private List<LeaveApplication> leaveApplications = new();
+    private readonly Dictionary<int, string> reviewComments = new();
+
+    private IEnumerable<LeaveApplication> filteredApplications =>
+        string.Equals(selectedStatusFilter, "All", StringComparison.OrdinalIgnoreCase)
+            ? leaveApplications
+            : leaveApplications.Where(x => string.Equals(x.Status, selectedStatusFilter, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadPageData();
+        StateHasChanged();
+    }
+
+    private async Task LoadPageData()
+    {
+        isLoading = true;
+        alertMessage = string.Empty;
+
+        var role = await sessionStorage.GetItemAsync<string>("adminRole");
+        reviewerRole = role ?? string.Empty;
+        isAuthorized = string.Equals(reviewerRole, "Admin", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(reviewerRole, "Higher Authority", StringComparison.OrdinalIgnoreCase);
+
+        var employeeIdRaw = await sessionStorage.GetItemAsync<string>("employeeId");
+        if (!string.IsNullOrWhiteSpace(employeeIdRaw) && int.TryParse(employeeIdRaw, out var parsedId))
+        {
+            reviewerEmployeeId = parsedId;
+        }
+
+        if (!isAuthorized)
+        {
+            isLoading = false;
+            return;
+        }
+
+        leaveApplications = await adminPanelService.GetAllLeaveApplicationsAsync();
+        reviewComments.Clear();
+        foreach (var app in leaveApplications)
+        {
+            reviewComments[app.Id] = app.ReviewerComments ?? string.Empty;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task ReviewApplication(int applicationId, bool approve)
+    {
+        if (isReviewing || !isAuthorized) return;
+
+        isReviewing = true;
+        alertMessage = string.Empty;
+        isSuccess = false;
+        try
+        {
+            reviewComments.TryGetValue(applicationId, out var comments);
+            var result = await adminPanelService.ReviewLeaveApplicationAsync(
+                applicationId,
+                reviewerEmployeeId,
+                approve,
+                comments);
+
+            isSuccess = result.Success;
+            alertMessage = result.Message;
+
+            if (result.Success)
+            {
+                leaveApplications = await adminPanelService.GetAllLeaveApplicationsAsync();
+                foreach (var app in leaveApplications)
+                {
+                    if (!reviewComments.ContainsKey(app.Id))
+                    {
+                        reviewComments[app.Id] = app.ReviewerComments ?? string.Empty;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            alertMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isReviewing = false;
+        }
+    }
+
+    private static string GetStatusClass(string status)
+    {
+        if (string.Equals(status, "Approved", StringComparison.OrdinalIgnoreCase)) return "status-approved";
+        if (string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase)) return "status-rejected";
+        return "status-pending";
+    }
+}

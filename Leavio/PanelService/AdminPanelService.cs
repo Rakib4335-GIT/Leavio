@@ -114,17 +114,26 @@ namespace Leavio.PanelService
                     }
                 }
                 
+                await EnsureDefaultEmploymentTypesAsync(context);
+                await EnsureDefaultLeaveTypesAsync(context);
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+                var defaultEmpId = await context.EmploymentTypes
+                    .Where(e => e.Code == "FullTime")
+                    .Select(e => e.Id)
+                    .FirstAsync();
+
                 var dbAdminInfo = new AdminInfo
                 {
                     UserId = registrationModel.UserId,
                     Name = registrationModel.Name,
                     Email = registrationModel.Email,
                     Password = registrationModel.Password,
-                    PhoneNumber = null, // Optional field - may not exist in DB
-                    ProfilePicture = null // Optional field - may not exist in DB
-                    // RoleId is optional - we use User_Role table instead
+                    PhoneNumber = null,
+                    ProfilePicture = null,
+                    EmploymentTypeId = defaultEmpId
                 };
-                
+
                 await context.AdminInfos.AddAsync(dbAdminInfo);
                 await context.SaveChangesAsync();
 
@@ -619,7 +628,8 @@ namespace Leavio.PanelService
                         Email = u.Email,
                         Password = u.Password,
                         PhoneNumber = u.PhoneNumber,
-                        ProfilePicture = u.ProfilePicture
+                        ProfilePicture = u.ProfilePicture,
+                        EmploymentTypeId = u.EmploymentTypeId
                     })
                     .ToListAsync();
             }
@@ -1346,6 +1356,907 @@ namespace Leavio.PanelService
                     Success = false,
                     Message = $"An error occurred: {ex.Message}"
                 };
+            }
+        }
+
+        // Leave Management Methods
+        public async Task<List<EmploymentTypeDefinition>> GetEmploymentTypesForManagementAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+                return await context.EmploymentTypes
+                    .AsNoTracking()
+                    .OrderBy(e => e.DisplayOrder)
+                    .ThenBy(e => e.Name)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<EmploymentTypeDefinition>();
+            }
+        }
+
+        public async Task<ResponseModel> SaveEmploymentTypesConfigurationAsync(IReadOnlyList<EmploymentTypeManagementItem> items)
+        {
+            if (items == null || items.Count == 0)
+                return new ResponseModel { Success = false, Message = "No employment types to save." };
+
+            var names = items.Select(i => (i.Name ?? string.Empty).Trim()).Where(n => n.Length > 0).ToList();
+            if (names.Count != items.Count)
+                return new ResponseModel { Success = false, Message = "Each employment type must have a name." };
+            if (names.Count != names.Distinct(StringComparer.OrdinalIgnoreCase).Count())
+                return new ResponseModel { Success = false, Message = "Employment type names must be unique." };
+
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+
+                foreach (var item in items)
+                {
+                    var name = item.Name.Trim();
+                    if (name.Length > 100)
+                        return new ResponseModel { Success = false, Message = "Name is too long." };
+
+                    if (item.Id > 0)
+                    {
+                        var entity = await context.EmploymentTypes.FirstOrDefaultAsync(e => e.Id == item.Id);
+                        if (entity == null)
+                            return new ResponseModel { Success = false, Message = $"Employment type {item.Id} not found." };
+
+                        var taken = await context.EmploymentTypes.AnyAsync(e => e.Id != item.Id && e.Name.ToLower() == name.ToLower());
+                        if (taken)
+                            return new ResponseModel { Success = false, Message = $"The name \"{name}\" is already used." };
+
+                        entity.Name = name;
+                        entity.DisplayOrder = item.DisplayOrder;
+                        entity.IsActive = item.IsActive;
+                    }
+                    else
+                    {
+                        var taken = await context.EmploymentTypes.AnyAsync(e => e.Name.ToLower() == name.ToLower());
+                        if (taken)
+                            return new ResponseModel { Success = false, Message = $"The name \"{name}\" is already used." };
+
+                        var code = await GenerateUniqueEmploymentTypeCodeAsync(context, name);
+                        context.EmploymentTypes.Add(new EmploymentTypeDefinition
+                        {
+                            Name = name,
+                            Code = code,
+                            DisplayOrder = item.DisplayOrder,
+                            IsActive = item.IsActive
+                        });
+                    }
+                }
+
+                await context.SaveChangesAsync();
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+                var (vf, vt) = GetCurrentLeaveWindow(DateTime.Today);
+                foreach (var empId in await context.AdminInfos.Select(e => e.Id).ToListAsync())
+                    await EnsureLeaveBalancesForEmployeeAsync(context, empId, vf, vt);
+
+                return new ResponseModel { Success = true, Message = "Employment types saved." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        public async Task<List<LeaveType>> GetActiveLeaveTypesAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultLeaveTypesAsync(context);
+                return await context.LeaveTypes
+                    .AsNoTracking()
+                    .Where(t => t.IsActive)
+                    .OrderBy(t => t.DisplayOrder)
+                    .ThenBy(t => t.Name)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<LeaveType>();
+            }
+        }
+
+        /// <summary>Leave types the employee may request, based on employment category and configured allocations.</summary>
+        public async Task<List<LeaveType>> GetActiveLeaveTypesForEmployeeAsync(int employeeId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+                await EnsureDefaultLeaveTypesAsync(context);
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+                var empTypeId = await context.AdminInfos
+                    .AsNoTracking()
+                    .Where(e => e.Id == employeeId)
+                    .Select(e => e.EmploymentTypeId)
+                    .FirstOrDefaultAsync();
+                if (empTypeId <= 0)
+                    return new List<LeaveType>();
+
+                var allowedIds = await context.LeaveTypeEmploymentAllocations
+                    .AsNoTracking()
+                    .Where(a => a.EmploymentTypeId == empTypeId && a.IsAvailable && a.AllocationDays > 0)
+                    .Select(a => a.LeaveTypeId)
+                    .ToListAsync();
+
+                return await context.LeaveTypes
+                    .AsNoTracking()
+                    .Where(t => t.IsActive && allowedIds.Contains(t.Id))
+                    .OrderBy(t => t.DisplayOrder)
+                    .ThenBy(t => t.Name)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<LeaveType>();
+            }
+        }
+
+        public async Task<List<LeaveType>> GetLeaveTypesForManagementAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+                await EnsureDefaultLeaveTypesAsync(context);
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+                return await context.LeaveTypes
+                    .AsNoTracking()
+                    .Include(t => t.EmploymentAllocations)
+                    .OrderBy(t => t.DisplayOrder)
+                    .ThenBy(t => t.Name)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<LeaveType>();
+            }
+        }
+
+        public async Task<ResponseModel> SaveLeaveTypesConfigurationAsync(IReadOnlyList<LeaveTypeManagementItem> items)
+        {
+            if (items == null || items.Count == 0)
+                return new ResponseModel { Success = false, Message = "No leave types to save." };
+
+            var trimmedNames = items
+                .Select(i => (i.Name ?? string.Empty).Trim())
+                .Where(n => n.Length > 0)
+                .ToList();
+            if (trimmedNames.Count != items.Count)
+                return new ResponseModel { Success = false, Message = "Each leave type must have a name." };
+            if (trimmedNames.Count != trimmedNames.Distinct(StringComparer.OrdinalIgnoreCase).Count())
+                return new ResponseModel { Success = false, Message = "Leave type names must be unique." };
+
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+                await EnsureDefaultLeaveTypesAsync(context);
+
+                foreach (var item in items)
+                {
+                    var name = item.Name.Trim();
+                    if (name.Length > 100)
+                        return new ResponseModel { Success = false, Message = $"Name too long: {name}." };
+
+                    if (item.EmploymentAllocations == null || item.EmploymentAllocations.Count == 0)
+                        return new ResponseModel { Success = false, Message = $"Configure at least one employment allocation for \"{name}\"." };
+
+                    LeaveType entity;
+                    if (item.Id > 0)
+                    {
+                        entity = await context.LeaveTypes.FirstOrDefaultAsync(t => t.Id == item.Id);
+                        if (entity == null)
+                            return new ResponseModel { Success = false, Message = $"Leave type id {item.Id} was not found." };
+
+                        var nameTaken = await context.LeaveTypes.AnyAsync(t => t.Id != item.Id && t.Name.ToLower() == name.ToLower());
+                        if (nameTaken)
+                            return new ResponseModel { Success = false, Message = $"The name \"{name}\" is already used." };
+
+                        entity.Name = name;
+                        entity.RequiresDocumentForMultiDay = item.RequiresDocumentForMultiDay;
+                        entity.DisplayOrder = item.DisplayOrder;
+                        entity.IsActive = item.IsActive;
+                    }
+                    else
+                    {
+                        var nameTakenNew = await context.LeaveTypes.AnyAsync(t => t.Name.ToLower() == name.ToLower());
+                        if (nameTakenNew)
+                            return new ResponseModel { Success = false, Message = $"The name \"{name}\" is already used." };
+
+                        var defaultDays = item.EmploymentAllocations.Max(a => a.AllocationDays);
+                        entity = new LeaveType
+                        {
+                            Name = name,
+                            DefaultAllocationDays = defaultDays,
+                            RequiresDocumentForMultiDay = item.RequiresDocumentForMultiDay,
+                            DisplayOrder = item.DisplayOrder,
+                            IsActive = item.IsActive
+                        };
+                        context.LeaveTypes.Add(entity);
+                        await context.SaveChangesAsync();
+                    }
+
+                    var maxAlloc = item.EmploymentAllocations.Max(a => a.AllocationDays);
+                    entity.DefaultAllocationDays = maxAlloc;
+
+                    var existingRows = await context.LeaveTypeEmploymentAllocations
+                        .Where(a => a.LeaveTypeId == entity.Id)
+                        .ToListAsync();
+                    var wanted = item.EmploymentAllocations
+                        .GroupBy(a => a.EmploymentTypeId)
+                        .ToDictionary(g => g.Key, g => g.Last());
+
+                    foreach (var row in existingRows)
+                    {
+                        if (!wanted.ContainsKey(row.EmploymentTypeId))
+                            context.LeaveTypeEmploymentAllocations.Remove(row);
+                    }
+
+                    foreach (var kv in wanted)
+                    {
+                        var etId = kv.Key;
+                        var al = kv.Value;
+                        var row = await context.LeaveTypeEmploymentAllocations
+                            .FirstOrDefaultAsync(a => a.LeaveTypeId == entity.Id && a.EmploymentTypeId == etId);
+                        if (row == null)
+                        {
+                            context.LeaveTypeEmploymentAllocations.Add(new LeaveTypeEmploymentAllocation
+                            {
+                                LeaveTypeId = entity.Id,
+                                EmploymentTypeId = etId,
+                                AllocationDays = al.AllocationDays,
+                                IsAvailable = al.IsAvailable
+                            });
+                        }
+                        else
+                        {
+                            row.AllocationDays = al.AllocationDays;
+                            row.IsAvailable = al.IsAvailable;
+                        }
+                    }
+                }
+
+                await context.SaveChangesAsync();
+
+                var (vf, vt) = GetCurrentLeaveWindow(DateTime.Today);
+                var employeeIds = await context.AdminInfos.Select(e => e.Id).ToListAsync();
+                foreach (var empId in employeeIds)
+                    await EnsureLeaveBalancesForEmployeeAsync(context, empId, vf, vt);
+
+                return new ResponseModel { Success = true, Message = "Leave configuration saved." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        public async Task<ResponseModel> UpdateEmployeeEmploymentTypeAsync(int employeeId, int employmentTypeId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+
+                var typeExists = await context.EmploymentTypes.AnyAsync(e => e.Id == employmentTypeId && e.IsActive);
+                if (!typeExists)
+                    return new ResponseModel { Success = false, Message = "Invalid employment type." };
+
+                var emp = await context.AdminInfos.FirstOrDefaultAsync(e => e.Id == employeeId);
+                if (emp == null)
+                    return new ResponseModel { Success = false, Message = "Employee not found." };
+
+                emp.EmploymentTypeId = employmentTypeId;
+                await context.SaveChangesAsync();
+
+                var (vf, vt) = GetCurrentLeaveWindow(DateTime.Today);
+                await EnsureLeaveBalancesForEmployeeAsync(context, employeeId, vf, vt);
+
+                return new ResponseModel { Success = true, Message = "Employment type updated." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        public async Task<List<EmployeeLeaveSummaryDto>> GetEmployeeLeaveSummariesForAdminAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+                await EnsureDefaultLeaveTypesAsync(context);
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+                var (validFrom, validTo) = GetCurrentLeaveWindow(DateTime.Today);
+
+                var sickTypeId = await context.LeaveTypes
+                    .AsNoTracking()
+                    .Where(t => t.Name == "Sick Leave")
+                    .Select(t => t.Id)
+                    .FirstOrDefaultAsync();
+
+                var employees = await context.AdminInfos.AsNoTracking().ToListAsync();
+                foreach (var emp in employees)
+                    await EnsureLeaveBalancesForEmployeeAsync(context, emp.Id, validFrom, validTo);
+
+                var result = new List<EmployeeLeaveSummaryDto>();
+                foreach (var emp in employees)
+                {
+                    var allowedLeaveTypeIds = await context.LeaveTypeEmploymentAllocations
+                        .AsNoTracking()
+                        .Where(a => a.EmploymentTypeId == emp.EmploymentTypeId && a.IsAvailable && a.AllocationDays > 0)
+                        .Select(a => a.LeaveTypeId)
+                        .ToListAsync();
+
+                    var balances = await context.LeaveBalances
+                        .AsNoTracking()
+                        .Include(b => b.LeaveType)
+                        .Where(b => b.EmployeeId == emp.Id && b.ValidFrom == validFrom)
+                        .ToListAsync();
+
+                    var filtered = balances
+                        .Where(b => b.LeaveType != null && b.LeaveType.IsActive && allowedLeaveTypeIds.Contains(b.LeaveTypeId))
+                        .ToList();
+
+                    var totalAlloc = filtered.Sum(b => b.TotalAllocatedDays);
+                    var totalRem = filtered.Sum(b => b.TotalAllocatedDays - b.UsedDays);
+                    var sick = filtered.FirstOrDefault(b => b.LeaveTypeId == sickTypeId);
+                    var sickAlloc = sick?.TotalAllocatedDays ?? 0m;
+                    var sickRem = sick != null ? sick.TotalAllocatedDays - sick.UsedDays : 0m;
+                    var vTo = filtered.Count > 0 ? filtered.Max(b => b.ValidTo) : validTo;
+                    var vFrom = filtered.Count > 0 ? filtered.Min(b => b.ValidFrom) : validFrom;
+
+                    var byType = filtered
+                        .OrderBy(b => b.LeaveType!.DisplayOrder)
+                        .ThenBy(b => b.LeaveType!.Name)
+                        .Select(b => new EmployeeLeaveTypeBalanceDto
+                        {
+                            LeaveTypeId = b.LeaveTypeId,
+                            LeaveTypeName = b.LeaveType!.Name,
+                            AllocatedDays = b.TotalAllocatedDays,
+                            UsedDays = b.UsedDays,
+                            RemainingDays = b.TotalAllocatedDays - b.UsedDays
+                        })
+                        .ToList();
+
+                    result.Add(new EmployeeLeaveSummaryDto
+                    {
+                        EmployeeId = emp.Id,
+                        LeaveTypes = byType,
+                        TotalAllocatedDays = totalAlloc,
+                        TotalRemainingDays = totalRem,
+                        SickAllocatedDays = sickAlloc,
+                        SickRemainingDays = sickRem,
+                        ValidFrom = vFrom,
+                        ValidTo = vTo
+                    });
+                }
+
+                return result;
+            }
+            catch (Exception)
+            {
+                return new List<EmployeeLeaveSummaryDto>();
+            }
+        }
+
+        public async Task<ResponseModel> UpdateEmployeeLeaveValidUntilAsync(int employeeId, DateTime newValidTo)
+        {
+            try
+            {
+                var (validFrom, defaultValidTo) = GetCurrentLeaveWindow(DateTime.Today);
+                if (newValidTo.Date < validFrom.Date)
+                    return new ResponseModel { Success = false, Message = "Valid until must be on or after the leave period start date." };
+
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+                await EnsureDefaultLeaveTypesAsync(context);
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+                var emp = await context.AdminInfos.FirstOrDefaultAsync(e => e.Id == employeeId);
+                if (emp == null)
+                    return new ResponseModel { Success = false, Message = "Employee not found." };
+
+                await EnsureLeaveBalancesForEmployeeAsync(context, employeeId, validFrom, defaultValidTo);
+                await context.SaveChangesAsync();
+
+                var rows = await context.LeaveBalances
+                    .Where(b => b.EmployeeId == employeeId && b.ValidFrom == validFrom)
+                    .ToListAsync();
+
+                foreach (var r in rows)
+                {
+                    r.ValidTo = newValidTo.Date;
+                    r.UpdatedOn = DateTime.Now;
+                }
+
+                await context.SaveChangesAsync();
+                return new ResponseModel { Success = true, Message = "Leave valid until date updated." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        public async Task<ResponseModel> UpdateEmployeeInfoRowAsync(int employeeId, int employmentTypeId, DateTime leaveValidUntil)
+        {
+            var empResult = await UpdateEmployeeEmploymentTypeAsync(employeeId, employmentTypeId);
+            if (!empResult.Success)
+                return empResult;
+
+            var dateResult = await UpdateEmployeeLeaveValidUntilAsync(employeeId, leaveValidUntil);
+            if (!dateResult.Success)
+                return dateResult;
+
+            return new ResponseModel { Success = true, Message = "Employee info saved." };
+        }
+
+        public async Task<List<LeaveBalance>> GetLeaveBalancesForEmployeeAsync(int employeeId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureDefaultEmploymentTypesAsync(context);
+                await EnsureDefaultLeaveTypesAsync(context);
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+                var (validFrom, validTo) = GetCurrentLeaveWindow(DateTime.Today);
+                await EnsureLeaveBalancesForEmployeeAsync(context, employeeId, validFrom, validTo);
+
+                var empTypeId = await context.AdminInfos
+                    .AsNoTracking()
+                    .Where(e => e.Id == employeeId)
+                    .Select(e => e.EmploymentTypeId)
+                    .FirstOrDefaultAsync();
+
+                var allowedLeaveTypeIds = await context.LeaveTypeEmploymentAllocations
+                    .AsNoTracking()
+                    .Where(a => a.EmploymentTypeId == empTypeId && a.IsAvailable && a.AllocationDays > 0)
+                    .Select(a => a.LeaveTypeId)
+                    .ToListAsync();
+
+                var list = await context.LeaveBalances
+                    .AsNoTracking()
+                    .Include(b => b.LeaveType)
+                    .Where(b => b.EmployeeId == employeeId && b.ValidFrom == validFrom)
+                    .OrderBy(b => b.LeaveType.DisplayOrder)
+                    .ThenBy(b => b.LeaveType.Name)
+                    .ToListAsync();
+
+                return list
+                    .Where(b => b.LeaveType != null && b.LeaveType.IsActive && allowedLeaveTypeIds.Contains(b.LeaveTypeId))
+                    .ToList();
+            }
+            catch (Exception)
+            {
+                return new List<LeaveBalance>();
+            }
+        }
+
+        public async Task<List<LeaveApplication>> GetLeaveApplicationsForEmployeeAsync(int employeeId)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                return await context.LeaveApplications
+                    .AsNoTracking()
+                    .Include(a => a.LeaveType)
+                    .Include(a => a.ReviewedByEmployee)
+                    .Where(a => a.EmployeeId == employeeId)
+                    .OrderByDescending(a => a.AppliedOn)
+                    .ThenByDescending(a => a.Id)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<LeaveApplication>();
+            }
+        }
+
+        public async Task<List<LeaveApplication>> GetAllLeaveApplicationsAsync()
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                return await context.LeaveApplications
+                    .AsNoTracking()
+                    .Include(a => a.Employee)
+                    .Include(a => a.LeaveType)
+                    .Include(a => a.ReviewedByEmployee)
+                    .OrderBy(a => a.Status == "Pending" ? 0 : 1)
+                    .ThenByDescending(a => a.AppliedOn)
+                    .ThenByDescending(a => a.Id)
+                    .ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<LeaveApplication>();
+            }
+        }
+
+        public async Task<ResponseModel> ApplyLeaveAsync(int employeeId, int leaveTypeId, DateTime startDate, DateTime endDate, string reason, string? supportingDocumentPath)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+                await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+                if (employeeId <= 0)
+                    return new ResponseModel { Success = false, Message = "Invalid employee." };
+
+                if (startDate.Date > endDate.Date)
+                    return new ResponseModel { Success = false, Message = "Start date cannot be after end date." };
+
+                if (string.IsNullOrWhiteSpace(reason))
+                    return new ResponseModel { Success = false, Message = "Reason is required." };
+
+                if (reason.Trim().Length > 2000)
+                    return new ResponseModel { Success = false, Message = "Reason is too long (maximum 2000 characters)." };
+
+                var leaveType = await context.LeaveTypes
+                    .FirstOrDefaultAsync(t => t.Id == leaveTypeId && t.IsActive);
+                if (leaveType == null)
+                    return new ResponseModel { Success = false, Message = "Invalid leave type selected." };
+
+                var employeeRow = await context.AdminInfos
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == employeeId);
+                if (employeeRow == null)
+                    return new ResponseModel { Success = false, Message = "User not found." };
+
+                var allocOk = await context.LeaveTypeEmploymentAllocations
+                    .AsNoTracking()
+                    .AnyAsync(a =>
+                        a.LeaveTypeId == leaveTypeId &&
+                        a.EmploymentTypeId == employeeRow.EmploymentTypeId &&
+                        a.IsAvailable &&
+                        a.AllocationDays > 0);
+                if (!allocOk)
+                    return new ResponseModel { Success = false, Message = "This leave type is not available for your employment category." };
+                
+                var isSickLeave = string.Equals(leaveType.Name, "Sick Leave", StringComparison.OrdinalIgnoreCase);
+                var today = DateTime.Today;
+                if (isSickLeave && (startDate.Date > today || endDate.Date > today))
+                    return new ResponseModel { Success = false, Message = "For Sick Leave, only today or previous dates are allowed." };
+                if (!isSickLeave && (startDate.Date < today || endDate.Date < today))
+                    return new ResponseModel { Success = false, Message = "For this leave type, past dates are not allowed." };
+
+                var durationDays = CalculateDurationDays(startDate, endDate);
+                if (durationDays <= 0)
+                    return new ResponseModel { Success = false, Message = "Leave duration must be at least 1 day." };
+
+                if (isSickLeave && durationDays > 1 && string.IsNullOrWhiteSpace(supportingDocumentPath))
+                    return new ResponseModel { Success = false, Message = "Supporting document is required for multi-day sick leave." };
+
+                var conflicting = await context.LeaveApplications
+                    .AsNoTracking()
+                    .Include(a => a.LeaveType)
+                    .Where(a => a.EmployeeId == employeeId
+                        && a.Status != "Rejected"
+                        && a.StartDate <= endDate.Date
+                        && a.EndDate >= startDate.Date)
+                    .OrderBy(a => a.StartDate)
+                    .FirstOrDefaultAsync();
+                if (conflicting != null)
+                {
+                    var typeName = conflicting.LeaveType?.Name ?? "leave";
+                    var statusLabel = string.Equals(conflicting.Status, "Pending", StringComparison.OrdinalIgnoreCase)
+                        ? "pending"
+                        : conflicting.Status.ToLowerInvariant();
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = $"These dates overlap an existing {statusLabel} {typeName} request ({conflicting.StartDate:dd MMM yyyy} – {conflicting.EndDate:dd MMM yyyy}). Choose different dates that do not overlap."
+                    };
+                }
+
+                var (validFrom, validTo) = GetCurrentLeaveWindow(startDate.Date);
+
+                await EnsureLeaveBalancesForEmployeeAsync(context, employeeId, validFrom, validTo);
+                await RecalculateLeaveUsageAsync(context, employeeId, leaveTypeId, validFrom);
+
+                var balance = await context.LeaveBalances
+                    .FirstOrDefaultAsync(b =>
+                        b.EmployeeId == employeeId &&
+                        b.LeaveTypeId == leaveTypeId &&
+                        b.ValidFrom == validFrom);
+                if (balance == null)
+                    return new ResponseModel { Success = false, Message = "Unable to locate leave balance for the selected period." };
+
+                if (startDate.Date < balance.ValidFrom || endDate.Date > balance.ValidTo)
+                    return new ResponseModel { Success = false, Message = $"Selected dates must be within the leave period ({balance.ValidFrom:yyyy-MM-dd} to {balance.ValidTo:yyyy-MM-dd})." };
+
+                var pendingDays = await context.LeaveApplications
+                    .AsNoTracking()
+                    .Where(a => a.EmployeeId == employeeId
+                        && a.LeaveTypeId == leaveTypeId
+                        && a.Status == "Pending"
+                        && a.StartDate >= balance.ValidFrom
+                        && a.EndDate <= balance.ValidTo)
+                    .SumAsync(a => (decimal?)a.DurationDays) ?? 0m;
+
+                var availableDays = balance.TotalAllocatedDays - balance.UsedDays - pendingDays;
+                if (durationDays > availableDays)
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = $"Insufficient leave balance. Available: {availableDays:0.##} day(s), Requested: {durationDays:0.##} day(s)."
+                    };
+                }
+
+                var application = new LeaveApplication
+                {
+                    EmployeeId = employeeId,
+                    LeaveTypeId = leaveTypeId,
+                    StartDate = startDate.Date,
+                    EndDate = endDate.Date,
+                    DurationDays = durationDays,
+                    Reason = reason.Trim(),
+                    SupportingDocumentPath = string.IsNullOrWhiteSpace(supportingDocumentPath) ? null : supportingDocumentPath.Trim(),
+                    Status = "Pending",
+                    AppliedOn = DateTime.Now
+                };
+
+                await context.LeaveApplications.AddAsync(application);
+                await context.SaveChangesAsync();
+
+                return new ResponseModel { Success = true, Message = "Leave application submitted successfully." };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        public async Task<ResponseModel> ReviewLeaveApplicationAsync(int applicationId, int reviewerEmployeeId, bool approve, string? reviewerComments)
+        {
+            try
+            {
+                using var context = await _contextFactory.CreateDbContextAsync();
+
+                var application = await context.LeaveApplications
+                    .Include(a => a.LeaveType)
+                    .FirstOrDefaultAsync(a => a.Id == applicationId);
+
+                if (application == null)
+                    return new ResponseModel { Success = false, Message = "Leave application not found." };
+
+                if (!string.Equals(application.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                    return new ResponseModel { Success = false, Message = "Only pending applications can be reviewed." };
+
+                var (validFrom, validTo) = GetCurrentLeaveWindow(application.StartDate);
+                await EnsureLeaveBalancesForEmployeeAsync(context, application.EmployeeId, validFrom, validTo);
+                await RecalculateLeaveUsageAsync(context, application.EmployeeId, application.LeaveTypeId, validFrom);
+
+                if (approve)
+                {
+                    var balance = await context.LeaveBalances
+                        .FirstOrDefaultAsync(b =>
+                            b.EmployeeId == application.EmployeeId &&
+                            b.LeaveTypeId == application.LeaveTypeId &&
+                            b.ValidFrom == validFrom);
+                    if (balance == null)
+                        return new ResponseModel { Success = false, Message = "Unable to locate leave balance for approval." };
+
+                    var remainingBeforeApproval = balance.TotalAllocatedDays - balance.UsedDays;
+                    if (application.DurationDays > remainingBeforeApproval)
+                    {
+                        return new ResponseModel
+                        {
+                            Success = false,
+                            Message = $"Cannot approve. Remaining balance is {remainingBeforeApproval:0.##} day(s) but requested {application.DurationDays:0.##} day(s)."
+                        };
+                    }
+
+                    balance.UsedDays += application.DurationDays;
+                    balance.UpdatedOn = DateTime.Now;
+                    application.Status = "Approved";
+                }
+                else
+                {
+                    application.Status = "Rejected";
+                }
+
+                application.ReviewedByEmployeeId = reviewerEmployeeId > 0 ? reviewerEmployeeId : null;
+                application.ReviewedOn = DateTime.Now;
+                application.ReviewerComments = string.IsNullOrWhiteSpace(reviewerComments) ? null : reviewerComments.Trim();
+
+                await context.SaveChangesAsync();
+
+                return new ResponseModel
+                {
+                    Success = true,
+                    Message = approve ? "Leave application approved." : "Leave application rejected."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseModel { Success = false, Message = $"An error occurred: {ex.Message}" };
+            }
+        }
+
+        private static decimal CalculateDurationDays(DateTime startDate, DateTime endDate)
+        {
+            return (decimal)(endDate.Date - startDate.Date).TotalDays + 1;
+        }
+
+        private static (DateTime validFrom, DateTime validTo) GetCurrentLeaveWindow(DateTime referenceDate)
+        {
+            var validFrom = new DateTime(referenceDate.Year, 1, 1);
+            var validTo = new DateTime(referenceDate.Year, 12, 31);
+            return (validFrom, validTo);
+        }
+
+        private async Task EnsureDefaultEmploymentTypesAsync(RegesterServiceContext context)
+        {
+            if (await context.EmploymentTypes.AnyAsync())
+                return;
+
+            context.EmploymentTypes.AddRange(
+                new EmploymentTypeDefinition { Name = "Full-Time", Code = "FullTime", DisplayOrder = 1, IsActive = true },
+                new EmploymentTypeDefinition { Name = "Intern", Code = "Intern", DisplayOrder = 2, IsActive = true });
+            await context.SaveChangesAsync();
+        }
+
+        private async Task EnsureDefaultLeaveTypesAsync(RegesterServiceContext context)
+        {
+            if (await context.LeaveTypes.AnyAsync())
+                return;
+
+            await context.LeaveTypes.AddRangeAsync(new[]
+            {
+                new LeaveType { Name = "Sick Leave", DefaultAllocationDays = 10, RequiresDocumentForMultiDay = true, IsActive = true, DisplayOrder = 1 },
+                new LeaveType { Name = "Annual Leave", DefaultAllocationDays = 14, RequiresDocumentForMultiDay = false, IsActive = true, DisplayOrder = 2 },
+                new LeaveType { Name = "Casual Leave", DefaultAllocationDays = 10, RequiresDocumentForMultiDay = false, IsActive = true, DisplayOrder = 3 }
+            });
+            await context.SaveChangesAsync();
+        }
+
+        private async Task EnsureLeaveAllocationMatrixForAllTypesAsync(RegesterServiceContext context)
+        {
+            await EnsureDefaultEmploymentTypesAsync(context);
+            await EnsureDefaultLeaveTypesAsync(context);
+
+            var empIds = await context.EmploymentTypes.Where(e => e.IsActive).Select(e => e.Id).ToListAsync();
+            var leaveTypes = await context.LeaveTypes.ToListAsync();
+
+            foreach (var lt in leaveTypes)
+            {
+                foreach (var etId in empIds)
+                {
+                    var exists = await context.LeaveTypeEmploymentAllocations
+                        .AnyAsync(a => a.LeaveTypeId == lt.Id && a.EmploymentTypeId == etId);
+                    if (exists)
+                        continue;
+
+                    context.LeaveTypeEmploymentAllocations.Add(new LeaveTypeEmploymentAllocation
+                    {
+                        LeaveTypeId = lt.Id,
+                        EmploymentTypeId = etId,
+                        AllocationDays = lt.DefaultAllocationDays,
+                        IsAvailable = true
+                    });
+                }
+            }
+
+            await context.SaveChangesAsync();
+        }
+
+        private static async Task<string> GenerateUniqueEmploymentTypeCodeAsync(RegesterServiceContext context, string name)
+        {
+            var baseCode = new string((name ?? "Type").Where(char.IsLetterOrDigit).ToArray());
+            if (string.IsNullOrEmpty(baseCode))
+                baseCode = "Type";
+            if (baseCode.Length > 40)
+                baseCode = baseCode[..40];
+
+            var code = baseCode;
+            var n = 0;
+            while (await context.EmploymentTypes.AnyAsync(e => e.Code == code))
+            {
+                n++;
+                code = baseCode + n;
+                if (code.Length > 50)
+                    code = code[..50];
+            }
+
+            return code;
+        }
+
+        private async Task EnsureLeaveBalancesForEmployeeAsync(RegesterServiceContext context, int employeeId, DateTime validFrom, DateTime validTo)
+        {
+            await EnsureLeaveAllocationMatrixForAllTypesAsync(context);
+
+            var empTypeId = await context.AdminInfos
+                .AsNoTracking()
+                .Where(e => e.Id == employeeId)
+                .Select(e => e.EmploymentTypeId)
+                .FirstOrDefaultAsync();
+
+            var pairs = await context.LeaveTypeEmploymentAllocations
+                .Include(a => a.LeaveType)
+                .Where(a =>
+                    a.EmploymentTypeId == empTypeId &&
+                    a.IsAvailable &&
+                    a.AllocationDays > 0 &&
+                    a.LeaveType.IsActive)
+                .ToListAsync();
+
+            foreach (var p in pairs)
+            {
+                var alloc = p.AllocationDays;
+                var typeId = p.LeaveTypeId;
+
+                var balance = await context.LeaveBalances
+                    .FirstOrDefaultAsync(b =>
+                        b.EmployeeId == employeeId &&
+                        b.LeaveTypeId == typeId &&
+                        b.ValidFrom == validFrom);
+
+                if (balance == null)
+                {
+                    context.LeaveBalances.Add(new LeaveBalance
+                    {
+                        EmployeeId = employeeId,
+                        LeaveTypeId = typeId,
+                        TotalAllocatedDays = alloc,
+                        UsedDays = 0,
+                        ValidFrom = validFrom,
+                        ValidTo = validTo,
+                        UpdatedOn = DateTime.Now
+                    });
+                }
+                else if (balance.TotalAllocatedDays != alloc)
+                {
+                    balance.TotalAllocatedDays = alloc;
+                    balance.UpdatedOn = DateTime.Now;
+                }
+            }
+
+            await context.SaveChangesAsync();
+        }
+
+        private async Task RecalculateLeaveUsageAsync(RegesterServiceContext context, int employeeId, int leaveTypeId, DateTime validFrom)
+        {
+            var balance = await context.LeaveBalances
+                .FirstOrDefaultAsync(b =>
+                    b.EmployeeId == employeeId &&
+                    b.LeaveTypeId == leaveTypeId &&
+                    b.ValidFrom == validFrom);
+            if (balance == null)
+                return;
+
+            var vf = balance.ValidFrom;
+            var vt = balance.ValidTo;
+
+            var approvedUsed = await context.LeaveApplications
+                .Where(a => a.EmployeeId == employeeId
+                    && a.LeaveTypeId == leaveTypeId
+                    && a.Status == "Approved"
+                    && a.StartDate >= vf
+                    && a.EndDate <= vt)
+                .SumAsync(a => (decimal?)a.DurationDays) ?? 0m;
+
+            if (balance.UsedDays != approvedUsed)
+            {
+                balance.UsedDays = approvedUsed;
+                balance.UpdatedOn = DateTime.Now;
+                await context.SaveChangesAsync();
             }
         }
 

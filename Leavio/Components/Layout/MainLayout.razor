@@ -2,6 +2,7 @@
 @using Leavio.PanelService
 @using Leavio.DbModels
 @inject ISessionStorageService sessionStorage
+@inject IJSRuntime JSRuntime
 @inject AdminPanelService adminPanelService
 @inherits LayoutComponentBase
 @inject NavigationManager navigation
@@ -119,7 +120,7 @@
                                     <span class="sidebar-item-text">
                                         @if (!string.IsNullOrEmpty(menuItem.Icon))
                                         {
-                                            <span class="sidebar-icon">@menuItem.Icon</span>
+                                            <span class="sidebar-icon"><MenuIconDisplay Icon="@menuItem.Icon" /></span>
                                         }
                                         @menuItem.Name
                                     </span>
@@ -134,7 +135,7 @@
                                             <a href="@child.Url" class="sidebar-item sidebar-subitem" @onclick="() => CloseSubMenu(menuItem.Id)">
                                                 @if (!string.IsNullOrEmpty(child.Icon))
                                                 {
-                                                    <span class="sidebar-icon">@child.Icon</span>
+                                                    <span class="sidebar-icon"><MenuIconDisplay Icon="@child.Icon" /></span>
                                                 }
                                                 <span class="sidebar-item-text">@child.Name</span>
                                             </a>
@@ -147,7 +148,7 @@
                                 <a href="@menuItem.Url" class="sidebar-item">
                                     @if (!string.IsNullOrEmpty(menuItem.Icon))
                                     {
-                                        <span class="sidebar-icon">@menuItem.Icon</span>
+                                        <span class="sidebar-icon"><MenuIconDisplay Icon="@menuItem.Icon" /></span>
                                     }
                                     <span class="sidebar-item-text">@menuItem.Name</span>
                                 </a>
@@ -201,6 +202,8 @@
     {
         if (firstRender)
         {
+            await AuthPersistenceInterop.RestoreSessionFromLocalIfNeededAsync(JSRuntime, sessionStorage);
+
             var storedUserName = await sessionStorage.GetItemAsync<string>("adminName");
             var storedUserRole = await sessionStorage.GetItemAsync<string>("adminRole");
             var employeeIdStr = await sessionStorage.GetItemAsync<string>("employeeId");
@@ -262,6 +265,7 @@
         }
 
         await sessionStorage.ClearAsync();
+        await AuthPersistenceInterop.ClearPersistedAuthAsync(JSRuntime);
         isLoggedIn = false;
         showMenu = false;
         userName = string.Empty;
@@ -351,6 +355,7 @@
         showRoleMenu = false;
 
         await sessionStorage.SetItemAsync("adminRole", userRole);
+        await AuthPersistenceInterop.SyncRoleToLocalAsync(JSRuntime, userRole);
         await LoadMenuItems();
         StateHasChanged();
     }

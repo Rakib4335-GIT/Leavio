@@ -18,4 +18,8 @@ public partial class AdminInfo
     public string? PhoneNumber { get; set; }
 
     public string? ProfilePicture { get; set; }
+
+    public int EmploymentTypeId { get; set; }
+
+    public virtual EmploymentTypeDefinition EmploymentType { get; set; } = null!;
 }

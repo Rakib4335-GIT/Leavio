@@ -21,6 +21,11 @@ namespace Leavio.DbModels;
     public virtual DbSet<SystemSettings> SystemSettings { get; set; }
     public virtual DbSet<DailyLoginTracking> DailyLoginTrackings { get; set; }
         public virtual DbSet<MenuItem> MenuItems { get; set; }
+        public virtual DbSet<LeaveType> LeaveTypes { get; set; }
+        public virtual DbSet<LeaveBalance> LeaveBalances { get; set; }
+        public virtual DbSet<LeaveApplication> LeaveApplications { get; set; }
+        public virtual DbSet<EmploymentTypeDefinition> EmploymentTypes { get; set; }
+        public virtual DbSet<LeaveTypeEmploymentAllocation> LeaveTypeEmploymentAllocations { get; set; }
 
         public virtual DbSet<RoleMenuPermission> RoleMenuPermissions { get; set; }
 
@@ -44,6 +49,14 @@ namespace Leavio.DbModels;
             // Optional fields - may not exist in database yet
             entity.Property(e => e.PhoneNumber).HasMaxLength(20);
             entity.Property(e => e.ProfilePicture).HasMaxLength(500);
+
+            entity.Property(e => e.EmploymentTypeId).IsRequired();
+
+            entity.HasOne(e => e.EmploymentType)
+                .WithMany(t => t.Employees)
+                .HasForeignKey(e => e.EmploymentTypeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_AdminInfo_EmploymentType");
         });
 
         modelBuilder.Entity<Role>(entity =>
@@ -201,6 +214,182 @@ namespace Leavio.DbModels;
                 .WithMany()
                 .HasForeignKey(d => d.MenuItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LeaveType>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.ToTable("LeaveType");
+
+            entity.Property(e => e.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.DefaultAllocationDays)
+                .HasColumnType("decimal(5,2)")
+                .HasDefaultValue(0);
+
+            entity.Property(e => e.RequiresDocumentForMultiDay)
+                .HasDefaultValue(false);
+
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true);
+
+            entity.Property(e => e.DisplayOrder)
+                .HasDefaultValue(0);
+
+            entity.HasIndex(e => e.Name)
+                .IsUnique()
+                .HasDatabaseName("IX_LeaveType_Name");
+        });
+
+        modelBuilder.Entity<EmploymentTypeDefinition>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.ToTable("EmploymentType");
+
+            entity.Property(e => e.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.Code)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.DisplayOrder)
+                .HasDefaultValue(0);
+
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true);
+
+            entity.HasIndex(e => e.Name)
+                .IsUnique()
+                .HasDatabaseName("IX_EmploymentType_Name");
+
+            entity.HasIndex(e => e.Code)
+                .IsUnique()
+                .HasDatabaseName("IX_EmploymentType_Code");
+        });
+
+        modelBuilder.Entity<LeaveTypeEmploymentAllocation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.ToTable("LeaveTypeEmploymentAllocation");
+
+            entity.Property(e => e.AllocationDays)
+                .HasColumnType("decimal(5,2)")
+                .HasDefaultValue(0);
+
+            entity.Property(e => e.IsAvailable)
+                .HasDefaultValue(true);
+
+            entity.HasOne(e => e.LeaveType)
+                .WithMany(t => t.EmploymentAllocations)
+                .HasForeignKey(e => e.LeaveTypeId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_LeaveTypeEmploymentAllocation_LeaveType");
+
+            entity.HasOne(e => e.EmploymentType)
+                .WithMany(t => t.LeaveAllocations)
+                .HasForeignKey(e => e.EmploymentTypeId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_LeaveTypeEmploymentAllocation_EmploymentType");
+
+            entity.HasIndex(e => new { e.LeaveTypeId, e.EmploymentTypeId })
+                .IsUnique()
+                .HasDatabaseName("UQ_LeaveType_EmploymentType");
+        });
+
+        modelBuilder.Entity<LeaveBalance>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.ToTable("LeaveBalance");
+
+            entity.Property(e => e.TotalAllocatedDays)
+                .HasColumnType("decimal(5,2)")
+                .IsRequired();
+
+            entity.Property(e => e.UsedDays)
+                .HasColumnType("decimal(5,2)")
+                .HasDefaultValue(0);
+
+            entity.Property(e => e.ValidFrom)
+                .IsRequired();
+
+            entity.Property(e => e.ValidTo)
+                .IsRequired();
+
+            entity.Property(e => e.UpdatedOn)
+                .IsRequired();
+
+            entity.HasOne(e => e.Employee)
+                .WithMany()
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_LeaveBalance_AdminInfo");
+
+            entity.HasOne(e => e.LeaveType)
+                .WithMany(t => t.LeaveBalances)
+                .HasForeignKey(e => e.LeaveTypeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_LeaveBalance_LeaveType");
+
+            entity.HasIndex(e => new { e.EmployeeId, e.LeaveTypeId, e.ValidFrom, e.ValidTo })
+                .IsUnique()
+                .HasDatabaseName("IX_LeaveBalance_Employee_LeaveType_Period");
+        });
+
+        modelBuilder.Entity<LeaveApplication>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.ToTable("LeaveApplication");
+
+            entity.Property(e => e.StartDate).IsRequired();
+            entity.Property(e => e.EndDate).IsRequired();
+            entity.Property(e => e.DurationDays)
+                .HasColumnType("decimal(5,2)")
+                .IsRequired();
+
+            entity.Property(e => e.Reason)
+                .HasMaxLength(2000)
+                .IsRequired();
+
+            entity.Property(e => e.SupportingDocumentPath)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.AppliedOn)
+                .IsRequired();
+
+            entity.Property(e => e.ReviewerComments)
+                .HasMaxLength(1000);
+
+            entity.HasOne(e => e.Employee)
+                .WithMany()
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_LeaveApplication_Employee");
+
+            entity.HasOne(e => e.LeaveType)
+                .WithMany(t => t.LeaveApplications)
+                .HasForeignKey(e => e.LeaveTypeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_LeaveApplication_LeaveType");
+
+            entity.HasOne(e => e.ReviewedByEmployee)
+                .WithMany()
+                .HasForeignKey(e => e.ReviewedByEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_LeaveApplication_ReviewedBy");
+
+            entity.HasIndex(e => new { e.EmployeeId, e.Status })
+                .HasDatabaseName("IX_LeaveApplication_Employee_Status");
         });
 
         OnModelCreatingPartial(modelBuilder);

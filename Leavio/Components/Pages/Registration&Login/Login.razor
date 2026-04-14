@@ -1,6 +1,7 @@
 ﻿@page "/login"
 @using Leavio.Models
 @using Leavio.PanelService
+@using Leavio.Services
 @using Blazored.SessionStorage
 @using Microsoft.AspNetCore.Components
 @using Microsoft.JSInterop
@@ -345,6 +346,8 @@
                     await sessionStorage.SetItemAsync("adminRole", rolePart);
                     // EmployeeId is now the same as adminId (both are AdminInfo.Id)
                     await sessionStorage.SetItemAsync("employeeId", idPart);
+
+                    await ApplyRememberMePersistenceAsync(idPart, namePart, emailPart, rolePart);
                 }
                 else if (parts.Length >= 4)
                 {
@@ -360,6 +363,8 @@
                     await sessionStorage.SetItemAsync("adminRole", rolePart);
                     // EmployeeId is now the same as adminId (both are AdminInfo.Id)
                     await sessionStorage.SetItemAsync("employeeId", idPart);
+
+                    await ApplyRememberMePersistenceAsync(idPart, namePart, emailPart, rolePart);
                 }
 
                 navigation.NavigateTo("/", forceLoad: true);
@@ -380,6 +385,26 @@
         finally
         {
             isProcessing = false;
+        }
+    }
+
+    private async Task ApplyRememberMePersistenceAsync(string idPart, string namePart, string emailPart, string rolePart)
+    {
+        if (rememberMe)
+        {
+            var map = new Dictionary<string, string>
+            {
+                [AuthSessionKeys.AdminId] = idPart,
+                [AuthSessionKeys.AdminName] = namePart,
+                [AuthSessionKeys.AdminEmail] = emailPart,
+                [AuthSessionKeys.AdminRole] = rolePart,
+                [AuthSessionKeys.EmployeeId] = idPart
+            };
+            await AuthPersistenceInterop.PersistAuthToLocalAsync(JSRuntime, map);
+        }
+        else
+        {
+            await AuthPersistenceInterop.ClearPersistedAuthAsync(JSRuntime);
         }
     }
 }

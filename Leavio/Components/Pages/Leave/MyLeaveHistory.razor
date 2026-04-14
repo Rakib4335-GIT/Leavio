@@ -1,0 +1,152 @@
+@page "/my-leave-history"
+@using Leavio.DbModels
+@using Leavio.PanelService
+@using Blazored.SessionStorage
+@inject AdminPanelService adminPanelService
+@inject ISessionStorageService sessionStorage
+@inject NavigationManager navigation
+
+<PageTitle>My Leave History</PageTitle>
+
+@if (isLoading)
+{
+    <div class="history-loading">Loading your leave history...</div>
+}
+else
+{
+    <div class="history-page">
+        <div class="history-top-row">
+            <div class="history-header">
+                <h1>My Leave History</h1>
+                <p>Track all of your leave requests and their latest status.</p>
+            </div>
+            <button type="button" class="history-apply-btn" @onclick="OpenApplyModal">
+                Leave Application
+            </button>
+        </div>
+
+        <div class="history-filter-row">
+            <label for="statusFilter">Filter by status</label>
+            <select id="statusFilter" @bind="selectedStatusFilter">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+            </select>
+        </div>
+
+        @if (filteredApplications.Any())
+        {
+            <div class="history-table-wrapper">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Applied On</th>
+                            <th>Leave Type</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Reason</th>
+                            <th>Document</th>
+                            <th>Reviewed On</th>
+                            <th>Comments</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var app in filteredApplications)
+                        {
+                            <tr>
+                                <td>@app.AppliedOn.ToString("dd MMM yyyy HH:mm")</td>
+                                <td>@app.LeaveType?.Name</td>
+                                <td>@app.StartDate.ToString("dd MMM yyyy")</td>
+                                <td>@app.EndDate.ToString("dd MMM yyyy")</td>
+                                <td>@app.DurationDays.ToString("0.##") day(s)</td>
+                                <td>
+                                    <span class="status-badge @GetStatusClass(app.Status)">@app.Status</span>
+                                </td>
+                                <td>@app.Reason</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(app.SupportingDocumentPath))
+                                    {
+                                        <a href="@app.SupportingDocumentPath" target="_blank" rel="noopener noreferrer">View</a>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>@(app.ReviewedOn.HasValue ? app.ReviewedOn.Value.ToString("dd MMM yyyy HH:mm") : "-")</td>
+                                <td>@(string.IsNullOrWhiteSpace(app.ReviewerComments) ? "-" : app.ReviewerComments)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="history-empty">No leave applications found for the selected filter.</div>
+        }
+    </div>
+}
+
+@if (showApplyModal)
+{
+    <div class="apply-modal-backdrop" @onclick="CloseApplyModal">
+        <div class="apply-modal" @onclick:stopPropagation="true">
+            <div class="apply-modal-header">
+                <h2>Leave Application</h2>
+                <button type="button" class="apply-modal-close" @onclick="CloseApplyModal" aria-label="Close">×</button>
+            </div>
+            <ApplyLeaveForm EmbedInModal="true" OnSubmittedSuccessfully="OnApplyLeaveSubmitted" />
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool showApplyModal;
+    private int employeeId;
+    private List<LeaveApplication> leaveApplications = new();
+    private string selectedStatusFilter = "All";
+
+    private IEnumerable<LeaveApplication> filteredApplications =>
+        string.Equals(selectedStatusFilter, "All", StringComparison.OrdinalIgnoreCase)
+            ? leaveApplications
+            : leaveApplications.Where(x => string.Equals(x.Status, selectedStatusFilter, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var employeeIdRaw = await sessionStorage.GetItemAsync<string>("employeeId");
+        if (string.IsNullOrWhiteSpace(employeeIdRaw) || !int.TryParse(employeeIdRaw, out employeeId))
+        {
+            navigation.NavigateTo("/login");
+            return;
+        }
+
+        leaveApplications = await adminPanelService.GetLeaveApplicationsForEmployeeAsync(employeeId);
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void OpenApplyModal() => showApplyModal = true;
+
+    private void CloseApplyModal() => showApplyModal = false;
+
+    private async Task OnApplyLeaveSubmitted()
+    {
+        showApplyModal = false;
+        leaveApplications = await adminPanelService.GetLeaveApplicationsForEmployeeAsync(employeeId);
+        StateHasChanged();
+    }
+
+    private static string GetStatusClass(string status)
+    {
+        if (string.Equals(status, "Approved", StringComparison.OrdinalIgnoreCase)) return "status-approved";
+        if (string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase)) return "status-rejected";
+        return "status-pending";
+    }
+}
