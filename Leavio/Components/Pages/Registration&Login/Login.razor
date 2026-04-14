@@ -3,10 +3,12 @@
 @using Leavio.PanelService
 @using Blazored.SessionStorage
 @using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
 
 @inject AdminPanelService adminPanelService
 @inject ISessionStorageService sessionStorage
 @inject NavigationManager navigation
+@inject IJSRuntime JSRuntime
 
 <div class="login-page">
     <div class="login-card">
@@ -95,6 +97,13 @@
             </div>
             *@
 
+            <div class="remember-row">
+                <label class="remember-label" for="rememberMe">
+                    <input type="checkbox" id="rememberMe" @bind="rememberMe" disabled="@isProcessing" />
+                    <span>Remember Me</span>
+                </label>
+            </div>
+
             <div class="forgot-password">
                 <a href="#" class="forgot-link">Forgot password?</a>
             </div>
@@ -155,6 +164,8 @@
     private bool isProcessing = false;
     private bool isSuccess = false;
     private bool showPassword = false;
+    private bool rememberMe = false;
+    private const string RememberedLoginIdKey = "rememberedLoginId";
     
     // CAPTCHA variables
     private Random random = new Random();
@@ -169,6 +180,26 @@
     protected override void OnInitialized()
     {
         // GenerateCaptcha(); // CAPTCHA commented out
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        
+        try
+        {
+            var rememberedLoginId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", RememberedLoginIdKey);
+            if (!string.IsNullOrWhiteSpace(rememberedLoginId))
+            {
+                loginModel.EmailId = rememberedLoginId;
+                rememberMe = true;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Ignore browser storage issues and keep login form usable.
+        }
     }
 
     private void GenerateCaptcha()
@@ -287,6 +318,15 @@
 
             if (response.Success)
             {
+                if (rememberMe)
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", RememberedLoginIdKey, loginModel.EmailId ?? string.Empty);
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.removeItem", RememberedLoginIdKey);
+                }
+
                 // Parse the message: "Login Successful! User ID: {id} | Name: {name} | Email: {email} | Role: {role}"
                 var parts = response.Message.Split("|");
                 

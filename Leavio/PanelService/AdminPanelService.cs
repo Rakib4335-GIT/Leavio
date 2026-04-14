@@ -11,6 +11,12 @@ namespace Leavio.PanelService
         private static List<DbModels.Role>? _cachedRoles = null;
         private static DateTime _rolesCacheTime = DateTime.MinValue;
         private static readonly TimeSpan _cacheExpiry = TimeSpan.FromMinutes(5); // Cache for 5 minutes
+        private static readonly HashSet<string> StaticMenuUrls = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "/",
+            "/contact",
+            "/aboutUs"
+        };
         
         public AdminPanelService(IDbContextFactory<RegesterServiceContext> contextFactory)
         {
@@ -1351,6 +1357,7 @@ namespace Leavio.PanelService
                 using var context = await _contextFactory.CreateDbContextAsync();
                 return await context.MenuItems
                     .AsNoTracking()
+                    .Where(m => !StaticMenuUrls.Contains((m.Url ?? "").Trim()))
                     .Include(m => m.Parent)
                     .Include(m => m.Children)
                     .OrderBy(m => m.DisplayOrder)
@@ -1371,7 +1378,7 @@ namespace Leavio.PanelService
                 // Get only top-level menu items (ParentId is null) that are active
                 var query = context.MenuItems
                     .AsNoTracking()
-                    .Where(m => m.Status == true && m.ParentId == null);
+                    .Where(m => m.Status == true && m.ParentId == null && !StaticMenuUrls.Contains((m.Url ?? "").Trim()));
                 
                 // Filter by authentication requirement
                 if (!isAuthenticated)
@@ -1389,7 +1396,7 @@ namespace Leavio.PanelService
                 {
                     var childrenQuery = context.MenuItems
                         .AsNoTracking()
-                        .Where(c => c.ParentId == item.Id && c.Status == true);
+                        .Where(c => c.ParentId == item.Id && c.Status == true && !StaticMenuUrls.Contains((c.Url ?? "").Trim()));
                     
                     if (!isAuthenticated)
                     {
@@ -1596,7 +1603,7 @@ namespace Leavio.PanelService
                 using var context = await _contextFactory.CreateDbContextAsync();
                 var query = context.MenuItems
                     .AsNoTracking()
-                    .Where(m => m.ParentId == null); // Only top-level items can be parents
+                    .Where(m => m.ParentId == null && !StaticMenuUrls.Contains((m.Url ?? "").Trim())); // Only top-level items can be parents
                 
                 if (excludeId.HasValue)
                 {
@@ -1636,6 +1643,7 @@ namespace Leavio.PanelService
             try
             {
                 using var context = await _contextFactory.CreateDbContextAsync();
+                var normalizedUrl = (url ?? "").Trim();
 
                 // Validate input
                 if (string.IsNullOrWhiteSpace(name))
@@ -1664,6 +1672,15 @@ namespace Leavio.PanelService
                         Message = "Menu URL is too long (maximum 500 characters)."
                     };
                 }
+                
+                if (StaticMenuUrls.Contains(normalizedUrl))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "This route is a fixed system menu and cannot be managed here."
+                    };
+                }
 
                 // Validate parent if provided
                 if (parentId.HasValue && parentId.Value > 0)
@@ -1684,7 +1701,7 @@ namespace Leavio.PanelService
                 var menuItem = new MenuItem
                 {
                     Name = name.Trim(),
-                    Url = url?.Trim() ?? "",
+                    Url = normalizedUrl,
                     Status = status,
                     Icon = icon?.Trim(),
                     DisplayOrder = displayOrder,
@@ -1717,6 +1734,7 @@ namespace Leavio.PanelService
             try
             {
                 using var context = await _contextFactory.CreateDbContextAsync();
+                var normalizedUrl = (url ?? "").Trim();
 
                 var menuItem = await context.MenuItems.FirstOrDefaultAsync(m => m.Id == id);
                 if (menuItem == null)
@@ -1753,6 +1771,15 @@ namespace Leavio.PanelService
                     {
                         Success = false,
                         Message = "Menu URL is too long (maximum 500 characters)."
+                    };
+                }
+                
+                if (StaticMenuUrls.Contains((menuItem.Url ?? "").Trim()) || StaticMenuUrls.Contains(normalizedUrl))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "This route is a fixed system menu and cannot be managed here."
                     };
                 }
 
@@ -1794,7 +1821,7 @@ namespace Leavio.PanelService
                 }
 
                 menuItem.Name = name.Trim();
-                menuItem.Url = url?.Trim() ?? "";
+                menuItem.Url = normalizedUrl;
                 menuItem.Status = status;
                 menuItem.Icon = icon?.Trim();
                 menuItem.DisplayOrder = displayOrder;
@@ -1835,6 +1862,15 @@ namespace Leavio.PanelService
                     {
                         Success = false,
                         Message = "Menu item not found."
+                    };
+                }
+                
+                if (StaticMenuUrls.Contains((menuItem.Url ?? "").Trim()))
+                {
+                    return new ResponseModel
+                    {
+                        Success = false,
+                        Message = "This route is a fixed system menu and cannot be managed here."
                     };
                 }
 

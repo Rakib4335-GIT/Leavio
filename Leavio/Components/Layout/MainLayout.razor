@@ -9,52 +9,30 @@
 <div class="page" @onclick="HandlePageClick">
 
     <header class="header">
-            <div>
+            <div class="header-left">
+                @if (isLoggedIn)
+                {
+                    <button type="button" class="sidebar-toggle-btn" @onclick="ToggleMenu" @onclick:stopPropagation="true" title="Toggle menu" aria-label="Toggle menu">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                }
                 <img src="Images/Favicon1.png" alt="Logo" class="logo" @onclick="ShowImageModal" style="cursor: pointer;">
                 <span class="header-title">Leavio</span>
             </div>
             <div class="nav-links">
-                @foreach (var menuItem in activeMenuItems)
-                {
-                    @if (menuItem.Children != null && menuItem.Children.Any())
-                    {
-                        <div class="menu-dropdown" @onclick:stopPropagation="true">
-                            <button class="menu-trigger" @onclick="() => ToggleSubMenu(menuItem.Id)">
-                                @if (!string.IsNullOrEmpty(menuItem.Icon))
-                                {
-                                    <span class="menu-icon">@menuItem.Icon</span>
-                                }
-                                <span>@menuItem.Name</span>
-                                <span class="menu-arrow @(openSubMenus.Contains(menuItem.Id) ? "open" : "")">▼</span>
-                            </button>
-                            @if (openSubMenus.Contains(menuItem.Id))
-                            {
-                                <div class="menu-dropdown-content">
-                                    @foreach (var child in menuItem.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name))
-                                    {
-                                        <a href="@child.Url" class="menu-button" @onclick="() => CloseSubMenu(menuItem.Id)">
-                                            @if (!string.IsNullOrEmpty(child.Icon))
-                                            {
-                                                <span class="menu-icon">@child.Icon</span>
-                                            }
-                                            <span>@child.Name</span>
-                                        </a>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    }
-                    else
-                    {
-                        <a href="@menuItem.Url">
-                            @if (!string.IsNullOrEmpty(menuItem.Icon))
-                            {
-                                <span class="menu-icon">@menuItem.Icon</span>
-                            }
-                            <span>@menuItem.Name</span>
-                        </a>
-                    }
-                }
+                <a href="/">
+                    <span>Home</span>
+                </a>
+                <a href="/contact">
+                    <span>Contact</span>
+                </a>
+                <a href="/aboutUs">
+                    <span>About Us</span>
+                </a>
             </div>
             <div class="header-role-container">
                 @if (isLoggedIn && availableRoles.Any())
@@ -125,11 +103,67 @@
                 }
             </div>
         </header>
-        <main>
+
+    <div class="body-with-sidebar">
+        @if (isLoggedIn && showMenu)
+        {
+            <aside class="sidebar" @onclick:stopPropagation="true">
+                <div class="sidebar-menu-heading">Menu</div>
+                <nav class="sidebar-nav">
+                    @foreach (var menuItem in activeMenuItems)
+                    {
+                        <div class="sidebar-item-wrapper">
+                            @if (menuItem.Children != null && menuItem.Children.Any())
+                            {
+                                <button class="sidebar-item sidebar-item-parent" @onclick="() => ToggleSubMenu(menuItem.Id)">
+                                    <span class="sidebar-item-text">
+                                        @if (!string.IsNullOrEmpty(menuItem.Icon))
+                                        {
+                                            <span class="sidebar-icon">@menuItem.Icon</span>
+                                        }
+                                        @menuItem.Name
+                                    </span>
+                                    <span class="sidebar-arrow @(openSubMenus.Contains(menuItem.Id) ? "open" : "")">▼</span>
+                                </button>
+
+                                @if (openSubMenus.Contains(menuItem.Id))
+                                {
+                                    <div class="sidebar-submenu">
+                                        @foreach (var child in menuItem.Children.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name))
+                                        {
+                                            <a href="@child.Url" class="sidebar-item sidebar-subitem" @onclick="() => CloseSubMenu(menuItem.Id)">
+                                                @if (!string.IsNullOrEmpty(child.Icon))
+                                                {
+                                                    <span class="sidebar-icon">@child.Icon</span>
+                                                }
+                                                <span class="sidebar-item-text">@child.Name</span>
+                                            </a>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <a href="@menuItem.Url" class="sidebar-item">
+                                    @if (!string.IsNullOrEmpty(menuItem.Icon))
+                                    {
+                                        <span class="sidebar-icon">@menuItem.Icon</span>
+                                    }
+                                    <span class="sidebar-item-text">@menuItem.Name</span>
+                                </a>
+                            }
+                        </div>
+                    }
+                </nav>
+            </aside>
+        }
+
+        <main class="main-content-area">
             <article class="content px-4">
                 @Body
             </article>
         </main>
+    </div>
 </div>
 
 <ImageModal IsVisible="@showImageModal" 
@@ -174,6 +208,7 @@
             if (!string.IsNullOrEmpty(storedUserName))
             {
                 isLoggedIn = true;
+                showMenu = true;
                 userName = storedUserName;
                 userRole = storedUserRole ?? "User";
                 currentRole = userRole;
@@ -228,6 +263,7 @@
 
         await sessionStorage.ClearAsync();
         isLoggedIn = false;
+        showMenu = false;
         userName = string.Empty;
         userRole = string.Empty;
         isAdmin = false;
@@ -258,10 +294,6 @@
 
     private void HandlePageClick()
     {
-        if (showMenu)
-        {
-            showMenu = false;
-        }
         if (showUserMenu)
         {
             showUserMenu = false;

@@ -200,6 +200,33 @@
     margin-top: -10px;
 }
 
+.remember-row {
+    display: flex;
+    align-items: center;
+    margin-top: -6px;
+    margin-bottom: -4px;
+}
+
+.remember-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
+}
+
+.remember-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.remember-label input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+}
+
 .forgot-link {
     color: #999;
     font-size: 14px;
